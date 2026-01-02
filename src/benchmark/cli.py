@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from .config import BenchmarkConfig
+from .hf_runner import run_inference, write_jsonl
+from .io import iter_images, list_images
+from .models import MODEL_SPECS
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Radiology image benchmark using Hugging Face models."
+    )
+    parser.add_argument("--model", required=True, choices=sorted(MODEL_SPECS.keys()))
+    parser.add_argument("--data", required=True, help="Path to radiology image folder")
+    parser.add_argument("--output", required=True, help="Output JSONL path")
+    parser.add_argument("--cache-dir", default="./model_caching")
+    parser.add_argument("--prompt-key", default=None)
+    parser.add_argument("--max-images", type=int, default=None)
+    parser.add_argument("--device", default=None)
+    parser.add_argument("--dtype", default=None)
+    parser.add_argument("--trust-remote-code", action="store_true")
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    config = BenchmarkConfig(
+        model_key=args.model,
+        data_dir=Path(args.data),
+        output_path=Path(args.output),
+        cache_dir=Path(args.cache_dir),
+        prompt_key=args.prompt_key,
+        max_images=args.max_images,
+        device=args.device,
+        dtype=args.dtype,
+        trust_remote_code=args.trust_remote_code,
+    )
+
+    image_paths = list_images(config.data_dir)
+    if config.max_images is not None:
+        image_paths = image_paths[: config.max_images]
+
+    images = ((str(path), image) for path, image in iter_images(image_paths))
+    results = run_inference(config, images)
+    write_jsonl(config.output_path, results)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
