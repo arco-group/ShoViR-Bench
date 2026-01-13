@@ -1,1 +1,0 @@
-"""Radiology benchmark package."""
