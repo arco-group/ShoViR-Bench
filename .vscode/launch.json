@@ -8,6 +8,8 @@
             "name": "Python Debugger (modules, integrated terminal)",
             "type": "debugpy",
             "request": "launch",
+        
+            "request": "launch",
             "program": "${file}",
             "cwd": "${workspaceFolder}",
 
@@ -17,7 +19,90 @@
             "env": {},
             "envFile": "${workspaceFolder}/.env",
             "preLaunchTask": "",
-            
+        },
+        {
+            "name": "Debug MedGemma (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.medgemma",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {},
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug MAIRA-2 (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.maira_2",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {},
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug Libra (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.libra",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {},
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug CXRMateED (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.cxrmateed",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {},
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug CheXagent (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.chexagent",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {},
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug MambaXray (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.mambaxray",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {},
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }

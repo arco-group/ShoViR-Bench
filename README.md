@@ -4,7 +4,7 @@ Minimal benchmark scaffold to run Hugging Face vision-language models on radiolo
 
 ## Layout
 
-- `src/benchmark/models.py`: model registry (start with MedGemma)
+- `src/benchmark/models/`: model registry and per-model packages (start with MedGemma)
 - `src/benchmark/prompts.py`: prompts keyed by model
 - `src/benchmark/cli.py`: CLI runner
 - `src/benchmark/hf_runner.py`: HF pipeline runner
