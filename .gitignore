@@ -1,0 +1,7 @@
+.venv_RRG/
+.venv/
+__pycache__/
+*.pyc
+model_caching/
+outputs/
+data/
