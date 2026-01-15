@@ -29,6 +29,8 @@
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen",
             "args": [
+                "--device",  "cuda:1",
+                "--cache-dir", ".models_cache/",
                 "data/debug/21010019239437483178822378443743294784_17k27f.png"
             ],
             "env": {},

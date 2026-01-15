@@ -7,16 +7,15 @@ from transformers import pipeline
 from ...prompts import PROMPTS
 from ..base import _resolve_dtype
 from . import MODEL_SPEC
-
+from transformers import AutoModelForVision2Seq, AutoProcessor
+import torch
 
 def _run_with_processor(
     image: Image.Image,
     prompt: str,
     pipe_kwargs: dict[str, object],
 ) -> list[dict[str, str]]:
-    from transformers import AutoModelForVision2Seq, AutoProcessor
 
-    import torch
 
     processor = AutoProcessor.from_pretrained(
         pipe_kwargs["model"],

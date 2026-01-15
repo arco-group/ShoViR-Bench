@@ -5,3 +5,5 @@ __pycache__/
 model_caching/
 outputs/
 data/
+.models_cache/
+.vscode/launch.json

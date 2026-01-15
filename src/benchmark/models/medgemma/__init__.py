@@ -8,7 +8,7 @@ class MedGemma(BaseHFLM):
 
 MODEL_SPEC = ModelSpec(
     key="medgemma",
-    model_id="google/medgemma-4b-it",
+    model_id="google/medgemma-1.5-4b-it",
     prompt_key="medgemma_default",
     task="image-to-text",
     supports_images=True,
