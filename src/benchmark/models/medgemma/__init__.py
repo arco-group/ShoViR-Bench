@@ -13,3 +13,5 @@ MODEL_SPEC = ModelSpec(
     task="image-to-text",
     supports_images=True,
 )
+
+MODEL_CLASS = MedGemma

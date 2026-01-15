@@ -2,28 +2,25 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterable, Optional
-
-from transformers import pipeline
+from typing import Iterable
 
 from .config import BenchmarkConfig, InferenceResult
-from .models import MODEL_SPECS
+from .models import MODEL_CLASSES, MODEL_SPECS
 from .prompts import PROMPTS
 
 
-def _build_pipeline(config: BenchmarkConfig):
+def _build_model_instance(config: BenchmarkConfig):
     spec = MODEL_SPECS[config.model_key]
-    pipeline_kwargs = {
-        "task": spec.task,
-        "model": spec.model_id,
-        "trust_remote_code": config.trust_remote_code,
-        "cache_dir": str(config.cache_dir),
-    }
-    if config.device is not None:
-        pipeline_kwargs["device"] = config.device
-    if config.dtype is not None:
-        pipeline_kwargs["torch_dtype"] = _resolve_dtype(config.dtype)
-    return pipeline(**pipeline_kwargs)
+    model_cls = MODEL_CLASSES[spec.key]
+    return model_cls(
+        name=spec.key,
+        device=config.device,
+        dtype=config.dtype,
+        model_id=spec.model_id,
+        task=spec.task,
+        trust_remote_code=config.trust_remote_code,
+        cache_dir=str(config.cache_dir),
+    )
 
 
 def _resolve_prompt(config: BenchmarkConfig) -> tuple[str, str]:
@@ -40,11 +37,11 @@ def run_inference(
 ) -> list[InferenceResult]:
     spec = MODEL_SPECS[config.model_key]
     prompt_key, prompt_text = _resolve_prompt(config)
-    pipe = _build_pipeline(config)
+    model = _build_model_instance(config)
 
     results: list[InferenceResult] = []
     for image_path, image in images:
-        output = pipe(image, prompt=prompt_text)
+        output = model(image, prompt_text)
         response_text = _extract_text(output)
         results.append(
             InferenceResult(
@@ -76,25 +73,3 @@ def _extract_text(output) -> str:
     if isinstance(output, dict):
         return output.get("generated_text", "")
     return str(output)
-
-
-def _resolve_dtype(value: str):
-    try:
-        import torch
-    except ImportError as exc:
-        raise RuntimeError("torch is required when setting --dtype") from exc
-
-    mapping = {
-        "float16": torch.float16,
-        "fp16": torch.float16,
-        "bfloat16": torch.bfloat16,
-        "bf16": torch.bfloat16,
-        "float32": torch.float32,
-        "fp32": torch.float32,
-    }
-    if value in mapping:
-        return mapping[value]
-    if value.startswith("torch."):
-        attr = value.split(".", 1)[1]
-        return getattr(torch, attr)
-    return value

@@ -1,4 +1,4 @@
-from .registry import MODEL_SPECS
+from .registry import MODEL_CLASSES, MODEL_SPECS
 from .spec import ModelSpec
 
-__all__ = ["ModelSpec", "MODEL_SPECS"]
+__all__ = ["ModelSpec", "MODEL_SPECS", "MODEL_CLASSES"]
