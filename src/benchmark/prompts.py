@@ -5,7 +5,8 @@ PROMPTS = {
 
     "medgemma_default": (
         "Provide a complete radiology report for this image, including a systematic review of visible anatomy, relevant findings, and a diagnostic impression."
-    )
+    ),
+    "radiology_minimal": "Generate a complete radiology report with findings and impression."
 }
 
 
