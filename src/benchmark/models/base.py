@@ -13,10 +13,11 @@ import torch
 from ..prompts import PROMPTS
 from .chat_template import (
     apply_image_token_rules,
-    build_chat_inputs,
+    build_chat_messages,
     drop_pixel_patches,
     load_model,
     load_processor,
+    _prepare_inputs,
     resolve_image_token_id,
     resolve_replacement_token_id,
 )
@@ -30,6 +31,8 @@ class BaseHFLM(abc.ABC):
         dtype: str | None,
         model_id: str,
         task: str,
+        generation_max_tokens: int = 512,
+        caching: bool = False,
         trust_remote_code: bool = False,
         cache_dir: str | None = None,
         image_preprocess: Callable[[Image.Image], Image.Image] | None = None,
@@ -38,6 +41,8 @@ class BaseHFLM(abc.ABC):
         self.dtype = dtype
         self.name = name
         self.model_id = model_id
+        self.generation_max_tokens = generation_max_tokens
+        self.caching = caching
         self.task = task
         self.trust_remote_code = trust_remote_code
         self.cache_dir = cache_dir
@@ -78,12 +83,13 @@ class BaseHFLM(abc.ABC):
         )
         with torch.no_grad():
             output_ids = model.generate(**inputs,
-                                        max_new_tokens=300,
-                                        do_sample=False,)
+                                        max_new_tokens=self.generation_max_tokens,
+                                        do_sample=False,
+                                        use_cache=self.caching)
         output_ids = output_ids[:, input_len:]
 
-
         decoded = processor.batch_decode(output_ids, skip_special_tokens=True)
+        # Convert the model output into plain text
         return [{"generated_text": text} for text in decoded]
 
 
@@ -97,16 +103,61 @@ class BaseHFLM(abc.ABC):
     ):
         image = self.preprocess_image(image)
         model, processor = self._ensure_loaded()
-        inputs, input_len = build_chat_inputs(
+        inputs, input_len = self.build_chat_inputs(
             processor,
             image,
             prompt_text,
-            device=self.device,
-            torch_dtype=self._torch_dtype,
             user_text=user_text,
         )
         inputs = self._apply_drop_config(inputs, processor, model, drop_config)
         return model, processor, inputs, input_len
+
+    def build_chat_inputs(
+        self,
+        processor,
+        image: Image.Image,
+        prompt_text: str,
+        *,
+        user_text: str = "Analyze this image.",
+        device: str | None = None,
+        torch_dtype=None,
+    ):
+        if device is None:
+            device = self.device
+        if torch_dtype is None:
+            torch_dtype = self._torch_dtype
+
+        if hasattr(processor, "apply_chat_template"):
+            messages = build_chat_messages(prompt_text, image, user_text=user_text)
+            try:
+                inputs = processor.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    tokenize=True,
+                    return_dict=True,
+                    return_tensors="pt",
+                )
+            except Exception:
+                inputs = processor(images=image, text=prompt_text, return_tensors="pt")
+        else:
+            inputs = processor(images=image, text=prompt_text, return_tensors="pt")
+
+        input_lens = None
+        if "attention_mask" in inputs and inputs["attention_mask"] is not None:
+            input_lens = inputs["attention_mask"].sum(dim=-1).to(torch.long)
+        elif "input_ids" in inputs and inputs["input_ids"] is not None:
+            input_lens = torch.full(
+                (inputs["input_ids"].shape[0],),
+                inputs["input_ids"].shape[-1],
+                dtype=torch.long,
+            )
+
+        inputs = _prepare_inputs(inputs, device=device, torch_dtype=torch_dtype)
+        inputs.pop("num_crops", None)
+
+        if input_lens is not None and input_lens.numel() == 1:
+            input_lens = int(input_lens.item())
+        return inputs, input_lens
 
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         if self.image_preprocess is not None:
@@ -122,6 +173,7 @@ class BaseHFLM(abc.ABC):
             )
         if self._model is None:
             self._model = load_model(
+                self.__class__.__name__,
                 self.model_id,
                 trust_remote_code=self.trust_remote_code,
                 cache_dir=self.cache_dir,
@@ -210,13 +262,16 @@ class BaseHFLM(abc.ABC):
 
         prompt = args.prompt or PROMPTS.get(model_spec.prompt_key, "")
         model = cls(
-            name=model_spec.key,
             device=args.device,
             dtype=args.dtype,
-            model_id=model_spec.model_id,
-            task=model_spec.task,
             trust_remote_code=args.trust_remote_code,
             cache_dir=args.cache_dir,
+            model_id=model_spec.model_id,
+            name=model_spec.key,
+            task=model_spec.task,
+            generation_max_tokens=model_spec.generation_max_tokens,
+            caching=model_spec.caching,
+            
         )
         image = Image.open(args.image)
         output = model(image, prompt)
