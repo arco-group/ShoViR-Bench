@@ -5,7 +5,12 @@ import torch
 from PIL import Image
 import random
 
-from transformers import AutoModelForCausalLM, AutoModelForVision2Seq, AutoProcessor
+from transformers import (
+    AutoModelForCausalLM,
+    AutoModelForImageTextToText,
+    AutoModelForVision2Seq,
+    AutoProcessor,
+)
 
 
 def load_processor(
@@ -30,14 +35,20 @@ def load_model(
     class_name = model_class_name
     last_error: Exception | None = None
 
-    if class_name in ("MedGemma", 'Maira2'):
-        
-            return AutoModelForCausalLM.from_pretrained(
-                model_id,
-                trust_remote_code=trust_remote_code,
-                cache_dir=cache_dir,
-                torch_dtype=torch_dtype,
-            )
+    if class_name in ("MedGemma", "Maira2", "CheXagent", "CXRMateED"):
+        return AutoModelForCausalLM.from_pretrained(
+            model_id,
+            trust_remote_code=trust_remote_code,
+            cache_dir=cache_dir,
+            torch_dtype=torch_dtype,
+        )
+    elif class_name in ("NVReasonCXR",):
+        return AutoModelForImageTextToText.from_pretrained(
+            model_id,
+            trust_remote_code=trust_remote_code,
+            cache_dir=cache_dir,
+            torch_dtype=torch_dtype,
+        )
     elif class_name in ():
     
         return AutoModelForVision2Seq.from_pretrained(

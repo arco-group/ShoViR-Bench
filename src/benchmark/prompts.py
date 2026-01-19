@@ -6,7 +6,9 @@ PROMPTS = {
     "medgemma_default": (
         "You are an expert radiologist."
     ),
+    "nv_reason_default": (
+        "You are an expert radiologist."
+    ),
     "radiology_minimal": "You are an expert radiologist."
 }
-
 
