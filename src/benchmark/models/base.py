@@ -11,6 +11,8 @@ from PIL import Image
 import torch
 
 from ..prompts import PROMPTS
+
+# HF path (default for most models)
 from .chat_template import (
     apply_image_token_rules,
     build_chat_inputs,
@@ -20,6 +22,18 @@ from .chat_template import (
     resolve_image_token_id,
     resolve_replacement_token_id,
 )
+
+# LLaVA path (special-case)
+from .chat_template_llavarad import (
+    build_chat_inputs_llava,
+    load_model_llava,
+    load_processor_llava,
+)
+
+# Register model_ids that should use the LLaVA path
+LLAVA_MODEL_IDS = {
+    "microsoft/llava-rad",
+}
 
 
 class BaseHFLM(abc.ABC):
@@ -77,15 +91,17 @@ class BaseHFLM(abc.ABC):
             drop_config=drop_config,
         )
         with torch.no_grad():
-            output_ids = model.generate(**inputs,
-                                        max_new_tokens=300,
-                                        do_sample=False,)
-        output_ids = output_ids[:, input_len:]
+            output_ids = model.generate(
+                **inputs,
+                max_new_tokens=300,
+                do_sample=False,
+            )
 
+        # Slice off the prompt tokens so decoding returns only the generated continuation
+        output_ids = output_ids[:, input_len:]
 
         decoded = processor.batch_decode(output_ids, skip_special_tokens=True)
         return [{"generated_text": text} for text in decoded]
-
 
     def prepare_inputs(
         self,
@@ -97,14 +113,27 @@ class BaseHFLM(abc.ABC):
     ):
         image = self.preprocess_image(image)
         model, processor = self._ensure_loaded()
-        inputs, input_len = build_chat_inputs(
-            processor,
-            image,
-            prompt_text,
-            device=self.device,
-            torch_dtype=self._torch_dtype,
-            user_text=user_text,
-        )
+
+        # Dispatch: LLaVA vs HF
+        if self.model_id in LLAVA_MODEL_IDS:
+            inputs, input_len = build_chat_inputs_llava(
+                processor,
+                image,
+                prompt_text,
+                device=self.device,
+                torch_dtype=self._torch_dtype,
+                user_text=user_text,
+            )
+        else:
+            inputs, input_len = build_chat_inputs(
+                processor,
+                image,
+                prompt_text,
+                device=self.device,
+                torch_dtype=self._torch_dtype,
+                user_text=user_text,
+            )
+
         inputs = self._apply_drop_config(inputs, processor, model, drop_config)
         return model, processor, inputs, input_len
 
@@ -114,21 +143,40 @@ class BaseHFLM(abc.ABC):
         return image.convert("RGB")
 
     def _ensure_loaded(self):
+        # Load processor
         if self._processor is None:
-            self._processor = load_processor(
-                self.model_id,
-                trust_remote_code=self.trust_remote_code,
-                cache_dir=self.cache_dir,
-            )
+            if self.model_id in LLAVA_MODEL_IDS:
+                self._processor = load_processor_llava(
+                    self.model_id,
+                    cache_dir=self.cache_dir,
+                    torch_dtype=self._torch_dtype,
+                )
+            else:
+                self._processor = load_processor(
+                    self.model_id,
+                    trust_remote_code=self.trust_remote_code,
+                    cache_dir=self.cache_dir,
+                )
+
+        # Load model
         if self._model is None:
-            self._model = load_model(
-                self.model_id,
-                trust_remote_code=self.trust_remote_code,
-                cache_dir=self.cache_dir,
-                torch_dtype=self._torch_dtype,
-            )
+            if self.model_id in LLAVA_MODEL_IDS:
+                self._model = load_model_llava(
+                    self.model_id,
+                    cache_dir=self.cache_dir,
+                    torch_dtype=self._torch_dtype,
+                )
+            else:
+                self._model = load_model(
+                    self.model_id,
+                    trust_remote_code=self.trust_remote_code,
+                    cache_dir=self.cache_dir,
+                    torch_dtype=self._torch_dtype,
+                )
+
             if self.device is not None:
                 self._model.to(self.device)
+
         return self._model, self._processor
 
     def _apply_drop_config(self, inputs, processor, model, drop_config):
@@ -136,6 +184,8 @@ class BaseHFLM(abc.ABC):
             return inputs
 
         prepared = dict(inputs)
+
+        # Image token id resolution (works for many HF processors; for LLaVA it may be None)
         image_token_id = drop_config.get("image_token_id")
         if image_token_id is None:
             image_token_id = resolve_image_token_id(processor, model)
@@ -153,13 +203,21 @@ class BaseHFLM(abc.ABC):
                 replace_id=replace_id,
             )
 
+        # Patch-drop: support both HF key ('pixel_values') and LLaVA key ('images')
+        tensor_key = None
         if "pixel_values" in prepared:
-            pixel_values = prepared["pixel_values"]
+            tensor_key = "pixel_values"
+        elif "images" in prepared:
+            tensor_key = "images"
+
+        if tensor_key is not None:
+            pixel_values = prepared[tensor_key]
             patch_size = drop_config.get("pixel_patch_size")
             drop_fraction = drop_config.get("pixel_patch_drop_fraction")
             drop_indices = drop_config.get("pixel_patch_drop_indices")
             fill_value = drop_config.get("pixel_patch_fill", 0.0)
             seed = drop_config.get("pixel_patch_seed")
+
             updated = drop_pixel_patches(
                 pixel_values,
                 patch_size=patch_size,
@@ -168,7 +226,8 @@ class BaseHFLM(abc.ABC):
                 fill_value=fill_value,
                 seed=seed,
             )
-            prepared["pixel_values"] = updated
+            prepared[tensor_key] = updated
+
         return prepared
 
     def process_img(self, paths):
