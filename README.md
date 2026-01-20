@@ -9,13 +9,21 @@ Minimal benchmark scaffold to run Hugging Face vision-language models on radiolo
 - `src/benchmark/cli.py`: CLI runner
 - `src/benchmark/hf_runner.py`: HF pipeline runner
 
+## Environment
+
+This project targets Python 3.12.
+
+```bash
+python3.12 -m venv .venv_rrg
+source .venv_rrg/bin/activate
+pip install -r requirements.txt
+```
+
+If you need the NV/CUDA-specific pins, install from `requirements_nv.txt` instead.
+
 ## Usage
 
 ```bash
-python3.12 -m venv .venv_RRG
-source .venv_RRG/bin/activate
-pip install -r requirements.txt
-
 python src/main.py \
   --model medgemma \
   --data /path/to/images \
