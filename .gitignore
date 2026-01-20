@@ -1,4 +1,5 @@
 .venv_RRG/
+.venv_nv/
 .venv/
 __pycache__/
 *.pyc

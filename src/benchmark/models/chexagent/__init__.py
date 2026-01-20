@@ -3,10 +3,6 @@ from ..base import BaseHFLM
 from ..chat_template import _prepare_inputs
 from ..spec import ModelSpec
 
-class CheXagent(BaseHFLM):
-    pass
-
-
 
 class CheXagent(BaseHFLM):
     pass

@@ -49,7 +49,7 @@ class NVReasonCXR(BaseHFLM):
                 dtype=torch.long,
             )
 
-        inputs = _prepare_inputs(inputs, device=device, torch_dtype=torch_dtype)
+        inputs = _prepare_inputs(inputs, device=device, dtype=torch_dtype)
         inputs.pop("num_crops", None)
 
         if input_lens is not None and input_lens.numel() == 1:
