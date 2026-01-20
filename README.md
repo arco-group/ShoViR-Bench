@@ -31,6 +31,9 @@ python src/main.py \
   --cache-dir ./model_caching
 ```
 
+
+
+
 ## Notes
 
 - Images are loaded as RGB and sent to the HF `image-to-text` pipeline.
