@@ -57,7 +57,7 @@ class Maira2(BaseHFLM):
 MODEL_SPEC = ModelSpec(
     key="maira-2",
     model_id="microsoft/maira-2",
-    prompt_key="medgemma_default",
+    prompt_key="maira2_default",
     task="image-to-text",
     generation_max_tokens = 450,
     caching = True,
