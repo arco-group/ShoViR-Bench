@@ -8,3 +8,4 @@ outputs/
 data/
 .models_cache/
 .vscode/launch.json
+RaDialog-interactive-radiology-report-generation
