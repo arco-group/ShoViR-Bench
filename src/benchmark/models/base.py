@@ -7,6 +7,7 @@ import random
 import re
 from typing import Callable
 
+import numpy as np
 from PIL import Image
 import torch
 
@@ -162,6 +163,21 @@ class BaseHFLM(abc.ABC):
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         if self.image_preprocess is not None:
             return self.image_preprocess(image)
+        return self._default_preprocess(image)
+
+    def _default_preprocess(self, image: Image.Image) -> Image.Image:
+        """Default preprocessing: normalize to [0,1], convert to uint8, convert to RGB."""
+        arr = np.array(image, dtype=np.float32)
+        # Normalize to [0, 1]
+        arr_min, arr_max = arr.min(), arr.max()
+        if arr_max - arr_min > 0:
+            arr = (arr - arr_min) / (arr_max - arr_min)
+        else:
+            arr = np.zeros_like(arr)
+        # Convert to uint8 [0, 255]
+        arr = (arr * 255).astype(np.uint8)
+        # Convert back to PIL Image and ensure RGB
+        image = Image.fromarray(arr)
         return image.convert("RGB")
 
     def _ensure_loaded(self):

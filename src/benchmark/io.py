@@ -23,8 +23,6 @@ def list_images(data_dir: Path) -> List[Path]:
 
 def open_image(path: Path) -> Image.Image:
     image = Image.open(path)
-    if image.mode != "RGB":
-        image = image.convert("RGB")
     return image
 
 
