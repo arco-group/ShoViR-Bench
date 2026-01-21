@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 import argparse
 from pathlib import Path
-
 from .config import BenchmarkConfig
 from .hf_runner import run_inference, run_inference_streaming, write_jsonl
 from .io import iter_images, list_images

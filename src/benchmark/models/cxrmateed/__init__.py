@@ -2,14 +2,14 @@ import transformers
 from ..base import BaseHFLM
 from ..spec import ModelSpec
 import torch
-from torchvision.transforms import v2
+
 
 class CXRMateED(BaseHFLM):
 
     def _ensure_loaded(self):
         tokenizer = transformers.AutoTokenizer.from_pretrained(self.model_id)
         model = transformers.AutoModel.from_pretrained(self.model_id, trust_remote_code=self.trust_remote_code).to(device=self.device)
-
+        from torchvision.transforms import v2
         test_transforms = v2.Compose(
         [
             v2.PILToTensor(),

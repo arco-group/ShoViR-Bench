@@ -4,14 +4,7 @@ from xml.parsers.expat import model
 import torch
 from PIL import Image
 import random
-
-from transformers import (
-    AutoModelForCausalLM,
-    AutoModelForImageTextToText,
-    AutoModelForVision2Seq,
-    AutoProcessor,
-)
-
+from transformers import AutoProcessor
 
 def load_processor(
     model_id: str,
@@ -36,6 +29,11 @@ def load_model(
     last_error: Exception | None = None
 
     if class_name in ("MedGemma", "Maira2", "CheXagent", "CXRMateED"):
+
+        from transformers import (
+            AutoModelForCausalLM,
+        )
+
         return AutoModelForCausalLM.from_pretrained(
             model_id,
             trust_remote_code=trust_remote_code,
@@ -43,6 +41,10 @@ def load_model(
             torch_dtype=torch_dtype,
         )
     elif class_name in ("NVReasonCXR",):
+
+        from transformers import (
+            AutoModelForImageTextToText,
+        )
         return AutoModelForImageTextToText.from_pretrained(
             model_id,
             trust_remote_code=trust_remote_code,
@@ -50,7 +52,9 @@ def load_model(
             torch_dtype=torch_dtype,
         )
     elif class_name in ():
-    
+        from transformers import (
+            AutoModelForVision2Seq,
+        )
         return AutoModelForVision2Seq.from_pretrained(
             model_id,
             trust_remote_code=trust_remote_code,
