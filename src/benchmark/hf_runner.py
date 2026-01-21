@@ -229,13 +229,30 @@ def write_jsonl(path: Path, results: Iterable[InferenceResult]) -> None:
             handle.write(json.dumps(item.__dict__, ensure_ascii=True) + "\n")
 
 
+
 def _extract_text(output) -> str:
     if isinstance(output, list):
         if not output:
             return ""
         if isinstance(output[0], dict):
-            return output[0].get("generated_text", "")
+            item = output[0]
+            # Handle generated_text format
+            if "generated_text" in item:
+                return item["generated_text"]
+            # Handle findings/impression format (e.g., CXRMateED)
+            if "findings" in item or "impression" in item:
+                findings = item.get("findings", "")
+                impression = item.get("impression", "")
+                return f"Findings: {findings}\nImpression: {impression}".strip()
+            return ""
         return str(output[0])
     if isinstance(output, dict):
-        return output.get("generated_text", "")
+        if "generated_text" in output:
+            return output["generated_text"]
+        # Handle findings/impression format
+        if "findings" in output or "impression" in output:
+            findings = output.get("findings", "")
+            impression = output.get("impression", "")
+            return f"Findings: {findings}\nImpression: {impression}".strip()
+        return ""
     return str(output)

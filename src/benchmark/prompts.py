@@ -1,12 +1,12 @@
 PROMPTS = {
-    "chestxray_default": (
+    "chexagent_default": (
         "You are an expert radiologist."
     ),
     "maira2_default": (
-        "You are an expert radiologist. Write ONLY the FINDINGS section for this chest X-ray."
+        "You are an expert radiologist."
     ),
     "medgemma_default": (
-        "You are an expert radiologist. Write ONLY the FINDINGS section for this chest X-ray."
+        "You are an expert radiologist."
     ),
     "nv_reason_default": (
         "You are an expert radiologist."

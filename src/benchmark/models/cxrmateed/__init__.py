@@ -2,32 +2,26 @@ import transformers
 from ..base import BaseHFLM
 from ..spec import ModelSpec
 import torch
-from torchvision import transforms
+from torchvision.transforms import v2
 
 class CXRMateED(BaseHFLM):
 
     def _ensure_loaded(self):
-        encoder_decoder = transformers.AutoModel.from_pretrained(self.model_id, trust_remote_code=True).to(self.device)
-        encoder_decoder.eval()
-        tokenizer = transformers.PreTrainedTokenizerFast.from_pretrained(self.model_id )
-        image_processor = transformers.AutoFeatureExtractor.from_pretrained(self.model_id)
+        tokenizer = transformers.AutoTokenizer.from_pretrained(self.model_id)
+        model = transformers.AutoModel.from_pretrained(self.model_id, trust_remote_code=self.trust_remote_code).to(device=self.device)
 
-        test_transforms = transforms.Compose(
-            [
-                transforms.Resize(size=image_processor.size['shortest_edge']),
-                transforms.CenterCrop(size=[
-                    image_processor.size['shortest_edge'],
-                    image_processor.size['shortest_edge'],
-                ]
-                ),
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=image_processor.image_mean,
-                    std=image_processor.image_std,
-                ),
-            ]
+        test_transforms = v2.Compose(
+        [
+            v2.PILToTensor(),
+            v2.Grayscale(num_output_channels=3),
+            v2.Resize(size=model.config.encoder.image_size, antialias=True),
+            v2.CenterCrop(size=[model.config.encoder.image_size]*2),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=model.config.encoder.image_mean, std=model.config.encoder.image_std),
+        ]
         )
-        return encoder_decoder, test_transforms, tokenizer
+
+        return model, test_transforms, tokenizer
 
 
     def __call__(
@@ -40,34 +34,25 @@ class CXRMateED(BaseHFLM):
     ) -> list[dict[str, str]]:
         model, test_transforms, tokenizer = self._ensure_loaded()
         self.preprocess_image = test_transforms
-        images = self.preprocess_image(image.convert('RGB')).unsqueeze(0)
+        # Shape: (C, H, W) -> (B, S, C, H, W) where B=1 (batch), S=1 (single image per study)
+        images = self.preprocess_image(image).unsqueeze(0).unsqueeze(0)
         with torch.no_grad():
-            outputs = model.generate(
-                
-                pixel_values=images.to(self.device),
-                special_token_ids=[tokenizer.sep_token_id],
-                bos_token_id=tokenizer.bos_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.pad_token_id,
-                return_dict_in_generate=True,
-                use_cache=False,
-                max_length=256,
-                num_beams=4,
-            )
+            
+            output_ids = model.generate(
+                pixel_values=images.to(device=self.device),
+                max_length=512,
+                num_beams=1,
+                bad_words_ids=[[tokenizer.convert_tokens_to_ids('[NF]')], [tokenizer.convert_tokens_to_ids('[NI]')]],
+            )   
+        findings, impression = model.split_and_decode_sections(output_ids, tokenizer)
 
-        # Findings and impression sections (exclude previous impression section):
-        findings, impression = model.split_and_decode_sections(
-            outputs.sequences,
-            [tokenizer.sep_token_id, tokenizer.eos_token_id],
-            tokenizer,
-        )
         for i, j in zip(findings, impression):
             print(f'Findings: {i}\nImpression: {j}\n')
         return [{"findings": findings[0], "impression": impression[0]}]
     
 MODEL_SPEC = ModelSpec(
     key="cxrmateed",
-    model_id="aehrc/cxrmate-single-tf",
+    model_id="aehrc/cxrmate-rrg24",
     prompt_key="medgemma_default",
     task="image-to-text",
     supports_images=True,
