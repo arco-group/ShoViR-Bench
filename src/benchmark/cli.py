@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--num-workers",
         type=int,
-        default=4,
+        default=8,
         help="Number of parallel image loading workers (default: 4)",
     )
     parser.add_argument(

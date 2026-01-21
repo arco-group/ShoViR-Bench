@@ -4,7 +4,7 @@ PROMPTS = {
     ),
 
     "medgemma_default": (
-        "You are an expert radiologist."
+        "You are an expert radiologist. Write ONLY the FINDINGS section for this chest X-ray. Do not write an Impression, Conclusion, Summary, or any other headings."
     ),
     "nv_reason_default": (
         "You are an expert radiologist."
