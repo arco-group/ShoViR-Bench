@@ -8,7 +8,7 @@ class CXRMateED(BaseHFLM):
 
     def _ensure_loaded(self):
         tokenizer = transformers.AutoTokenizer.from_pretrained(self.model_id)
-        model = transformers.AutoModel.from_pretrained(self.model_id, trust_remote_code=self.trust_remote_code).to(device=self.device)
+        model = transformers.AutoModel.from_pretrained(self.model_id, trust_remote_code=self.trust_remote_code, cache_dir=self.cache_dir).to(device=self.device)
         from torchvision.transforms import v2
         test_transforms = v2.Compose(
         [
