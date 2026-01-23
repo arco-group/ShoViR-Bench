@@ -8,3 +8,5 @@ class ModelSpec:
     prompt_key: str
     task: str
     supports_images: bool = True
+    generation_max_tokens: int = 128
+    caching: bool = False

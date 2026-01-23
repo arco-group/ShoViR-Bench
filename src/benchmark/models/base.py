@@ -7,62 +7,21 @@ import random
 import re
 from typing import Callable
 
+import numpy as np
 from PIL import Image
 import torch
 
 from ..prompts import PROMPTS
-
-# HF path (default for most models)
 from .chat_template import (
     apply_image_token_rules,
-    build_chat_inputs,
+    build_chat_messages,
     drop_pixel_patches,
     load_model,
     load_processor,
+    _prepare_inputs,
     resolve_image_token_id,
     resolve_replacement_token_id,
 )
-
-# Libra-backed multimodal path (handles both llava-rad and libra)
-from .chat_template_llava import (
-    build_chat_inputs_llava,
-    load_model_llava,
-    load_processor_llava,
-)
-
-# --- Hardcoded model IDs you care about (no ModelSpec changes) ---
-LLAVA_RAD_ID ="X-iZhang/libra-llava-rad"
-
-LIBRA_3B_ID = "X-iZhang/libra-v1.0-3b"
-
-LLAVA_RAD_BASE = None
-
-
-def _uses_libra_backend(model_id: str) -> bool:
-    mid = (model_id or "").lower()
-    return (
-        mid == LLAVA_RAD_ID.lower()
-        or mid == LIBRA_3B_ID.lower()
-        or "libra" in mid
-        or "llava-rad" in mid
-    )
-
-
-def _resolve_conv_mode(model_id: str) -> str:
-    mid = (model_id or "").lower()
-    if "llava-rad" in mid:
-        return "v1"
-    if "libra" in mid:
-        return "libra_v1"
-    return "v1"
-
-
-def _resolve_model_base(model_id: str) -> str | None:
-    mid = (model_id or "").lower()
-    if "llava-rad" in mid:
-        return LLAVA_RAD_BASE
-    # Libra models typically don't need model_base when loading from their own repo weights
-    return None
 
 
 class BaseHFLM(abc.ABC):
@@ -73,6 +32,8 @@ class BaseHFLM(abc.ABC):
         dtype: str | None,
         model_id: str,
         task: str,
+        generation_max_tokens: int = 512,
+        caching: bool = False,
         trust_remote_code: bool = False,
         cache_dir: str | None = None,
         image_preprocess: Callable[[Image.Image], Image.Image] | None = None,
@@ -81,6 +42,8 @@ class BaseHFLM(abc.ABC):
         self.dtype = dtype
         self.name = name
         self.model_id = model_id
+        self.generation_max_tokens = generation_max_tokens
+        self.caching = caching
         self.task = task
         self.trust_remote_code = trust_remote_code
         self.cache_dir = cache_dir
@@ -122,11 +85,12 @@ class BaseHFLM(abc.ABC):
         with torch.no_grad():
             output_ids = model.generate(
                 **inputs,
-                max_new_tokens=300,
+                max_new_tokens=self.generation_max_tokens,
                 do_sample=False,
+                use_cache=self.caching,
             )
-
         output_ids = output_ids[:, input_len:]
+
         decoded = processor.batch_decode(output_ids, skip_special_tokens=True)
         return [{"generated_text": text} for text in decoded]
 
@@ -140,82 +104,97 @@ class BaseHFLM(abc.ABC):
     ):
         image = self.preprocess_image(image)
         model, processor = self._ensure_loaded()
-
-        if _uses_libra_backend(self.model_id):
-            conv_mode = _resolve_conv_mode(self.model_id)
-            inputs, input_len = build_chat_inputs_llava(
-                model,
-                processor,
-                image,
-                prompt_text,
-                device=self.device,
-                torch_dtype=self._torch_dtype,
-                user_text=user_text,
-                conv_mode=conv_mode,
-            )
-        else:
-            inputs, input_len = build_chat_inputs(
-                processor,
-                image,
-                prompt_text,
-                device=self.device,
-                torch_dtype=self._torch_dtype,
-                user_text=user_text,
-            )
-
+        inputs, input_len = self.build_chat_inputs(
+            processor,
+            image,
+            prompt_text,
+            user_text=user_text,
+        )
         inputs = self._apply_drop_config(inputs, processor, model, drop_config)
         return model, processor, inputs, input_len
+
+    def build_chat_inputs(
+        self,
+        processor,
+        image: Image.Image,
+        prompt_text: str,
+        *,
+        user_text: str = "Analyze this image.",
+        device: str | None = None,
+        torch_dtype=None,
+    ):
+        if device is None:
+            device = self.device
+        if torch_dtype is None:
+            torch_dtype = self._torch_dtype
+
+        # Generic HF path: prefer chat_template if available, else processor(images,text)
+        if hasattr(processor, "apply_chat_template"):
+            messages = build_chat_messages(prompt_text, image, user_text=user_text)
+            try:
+                inputs = processor.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    tokenize=True,
+                    return_dict=True,
+                    return_tensors="pt",
+                )
+            except Exception:
+                inputs = processor(images=image, text=prompt_text, return_tensors="pt")
+        else:
+            inputs = processor(images=image, text=prompt_text, return_tensors="pt")
+
+        input_lens = None
+        if "attention_mask" in inputs and inputs["attention_mask"] is not None:
+            input_lens = inputs["attention_mask"].sum(dim=-1).to(torch.long)
+        elif "input_ids" in inputs and inputs["input_ids"] is not None:
+            input_lens = torch.full(
+                (inputs["input_ids"].shape[0],),
+                inputs["input_ids"].shape[-1],
+                dtype=torch.long,
+            )
+
+        inputs = _prepare_inputs(inputs, device=device, torch_dtype=torch_dtype)
+        inputs.pop("num_crops", None)
+
+        if input_lens is not None and input_lens.numel() == 1:
+            input_lens = int(input_lens.item())
+        return inputs, input_lens
 
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         if self.image_preprocess is not None:
             return self.image_preprocess(image)
+        return self._default_preprocess(image)
+
+    def _default_preprocess(self, image: Image.Image) -> Image.Image:
+        """Default preprocessing: normalize to [0,1], convert to uint8, convert to RGB."""
+        arr = np.array(image, dtype=np.float32)
+        arr_min, arr_max = arr.min(), arr.max()
+        if arr_max - arr_min > 0:
+            arr = (arr - arr_min) / (arr_max - arr_min)
+        else:
+            arr = np.zeros_like(arr)
+        arr = (arr * 255).astype(np.uint8)
+        image = Image.fromarray(arr)
         return image.convert("RGB")
 
     def _ensure_loaded(self):
-        use_libra_backend = _uses_libra_backend(self.model_id)
-        model_base = _resolve_model_base(self.model_id) if use_libra_backend else None
-
-        # Load processor
         if self._processor is None:
-            if use_libra_backend:
-                self._processor = load_processor_llava(
-                    self.model_id,
-                    model_base=model_base,
-                    cache_dir=self.cache_dir,
-                    torch_dtype=self._torch_dtype,
-                    device=self.device,
-                    device_map=None,
-                )
-            else:
-                self._processor = load_processor(
-                    self.model_id,
-                    trust_remote_code=self.trust_remote_code,
-                    cache_dir=self.cache_dir,
-                )
-
-        # Load model
+            self._processor = load_processor(
+                self.model_id,
+                trust_remote_code=self.trust_remote_code,
+                cache_dir=self.cache_dir,
+            )
         if self._model is None:
-            if use_libra_backend:
-                self._model = load_model_llava(
-                    self.model_id,
-                    model_base=model_base,
-                    cache_dir=self.cache_dir,
-                    torch_dtype=self._torch_dtype,
-                    device=self.device,
-                    device_map=None,
-                )
-            else:
-                self._model = load_model(
-                    self.model_id,
-                    trust_remote_code=self.trust_remote_code,
-                    cache_dir=self.cache_dir,
-                    torch_dtype=self._torch_dtype,
-                )
-
-            # Don't .to(device) if the model is already sharded/mapped
-            if self.device is not None and getattr(self._model, "hf_device_map", None) is None:
+            self._model = load_model(
+                self.__class__.__name__,
+                self.model_id,
+                trust_remote_code=self.trust_remote_code,
+                cache_dir=self.cache_dir,
+                torch_dtype=self._torch_dtype,
+            )
+            if self.device is not None:
                 self._model.to(self.device)
-
         return self._model, self._processor
 
     def _apply_drop_config(self, inputs, processor, model, drop_config):
@@ -223,7 +202,6 @@ class BaseHFLM(abc.ABC):
             return inputs
 
         prepared = dict(inputs)
-
         image_token_id = drop_config.get("image_token_id")
         if image_token_id is None:
             image_token_id = resolve_image_token_id(processor, model)
@@ -241,16 +219,14 @@ class BaseHFLM(abc.ABC):
                 replace_id=replace_id,
             )
 
-        tensor_key = "pixel_values" if "pixel_values" in prepared else ("images" if "images" in prepared else None)
-        if tensor_key is not None:
-            pixel_values = prepared[tensor_key]
+        if "pixel_values" in prepared:
+            pixel_values = prepared["pixel_values"]
             patch_size = drop_config.get("pixel_patch_size")
             drop_fraction = drop_config.get("pixel_patch_drop_fraction")
             drop_indices = drop_config.get("pixel_patch_drop_indices")
             fill_value = drop_config.get("pixel_patch_fill", 0.0)
             seed = drop_config.get("pixel_patch_seed")
-
-            prepared[tensor_key] = drop_pixel_patches(
+            prepared["pixel_values"] = drop_pixel_patches(
                 pixel_values,
                 patch_size=patch_size,
                 drop_fraction=drop_fraction,
@@ -258,7 +234,6 @@ class BaseHFLM(abc.ABC):
                 fill_value=fill_value,
                 seed=seed,
             )
-
         return prepared
 
     def process_img(self, paths):
@@ -300,13 +275,15 @@ class BaseHFLM(abc.ABC):
 
         prompt = args.prompt or PROMPTS.get(model_spec.prompt_key, "")
         model = cls(
-            name=model_spec.key,
             device=args.device,
             dtype=args.dtype,
-            model_id=model_spec.model_id,
-            task=model_spec.task,
             trust_remote_code=args.trust_remote_code,
             cache_dir=args.cache_dir,
+            model_id=model_spec.model_id,
+            name=model_spec.key,
+            task=model_spec.task,
+            generation_max_tokens=model_spec.generation_max_tokens,
+            caching=model_spec.caching,
         )
         image = Image.open(args.image)
         output = model(image, prompt)
@@ -333,3 +310,4 @@ def _resolve_dtype(value: str):
         attr = value.split(".", 1)[1]
         return getattr(torch, attr)
     return value
+
