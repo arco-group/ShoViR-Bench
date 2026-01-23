@@ -23,17 +23,46 @@ from .chat_template import (
     resolve_replacement_token_id,
 )
 
-# LLaVA path (special-case)
-from .chat_template_llavarad import (
+# Libra-backed multimodal path (handles both llava-rad and libra)
+from .chat_template_llava import (
     build_chat_inputs_llava,
     load_model_llava,
     load_processor_llava,
 )
 
-# Register model_ids that should use the LLaVA path
-LLAVA_MODEL_IDS = {
-    "microsoft/llava-rad",
-}
+# --- Hardcoded model IDs you care about (no ModelSpec changes) ---
+LLAVA_RAD_ID ="X-iZhang/libra-llava-rad"
+
+LIBRA_3B_ID = "X-iZhang/libra-v1.0-3b"
+
+LLAVA_RAD_BASE = None
+
+
+def _uses_libra_backend(model_id: str) -> bool:
+    mid = (model_id or "").lower()
+    return (
+        mid == LLAVA_RAD_ID.lower()
+        or mid == LIBRA_3B_ID.lower()
+        or "libra" in mid
+        or "llava-rad" in mid
+    )
+
+
+def _resolve_conv_mode(model_id: str) -> str:
+    mid = (model_id or "").lower()
+    if "llava-rad" in mid:
+        return "v1"
+    if "libra" in mid:
+        return "libra_v1"
+    return "v1"
+
+
+def _resolve_model_base(model_id: str) -> str | None:
+    mid = (model_id or "").lower()
+    if "llava-rad" in mid:
+        return LLAVA_RAD_BASE
+    # Libra models typically don't need model_base when loading from their own repo weights
+    return None
 
 
 class BaseHFLM(abc.ABC):
@@ -97,9 +126,7 @@ class BaseHFLM(abc.ABC):
                 do_sample=False,
             )
 
-        # Slice off the prompt tokens so decoding returns only the generated continuation
         output_ids = output_ids[:, input_len:]
-
         decoded = processor.batch_decode(output_ids, skip_special_tokens=True)
         return [{"generated_text": text} for text in decoded]
 
@@ -114,15 +141,17 @@ class BaseHFLM(abc.ABC):
         image = self.preprocess_image(image)
         model, processor = self._ensure_loaded()
 
-        # Dispatch: LLaVA vs HF
-        if self.model_id in LLAVA_MODEL_IDS:
+        if _uses_libra_backend(self.model_id):
+            conv_mode = _resolve_conv_mode(self.model_id)
             inputs, input_len = build_chat_inputs_llava(
+                model,
                 processor,
                 image,
                 prompt_text,
                 device=self.device,
                 torch_dtype=self._torch_dtype,
                 user_text=user_text,
+                conv_mode=conv_mode,
             )
         else:
             inputs, input_len = build_chat_inputs(
@@ -143,13 +172,19 @@ class BaseHFLM(abc.ABC):
         return image.convert("RGB")
 
     def _ensure_loaded(self):
+        use_libra_backend = _uses_libra_backend(self.model_id)
+        model_base = _resolve_model_base(self.model_id) if use_libra_backend else None
+
         # Load processor
         if self._processor is None:
-            if self.model_id in LLAVA_MODEL_IDS:
+            if use_libra_backend:
                 self._processor = load_processor_llava(
                     self.model_id,
+                    model_base=model_base,
                     cache_dir=self.cache_dir,
                     torch_dtype=self._torch_dtype,
+                    device=self.device,
+                    device_map=None,
                 )
             else:
                 self._processor = load_processor(
@@ -160,11 +195,14 @@ class BaseHFLM(abc.ABC):
 
         # Load model
         if self._model is None:
-            if self.model_id in LLAVA_MODEL_IDS:
+            if use_libra_backend:
                 self._model = load_model_llava(
                     self.model_id,
+                    model_base=model_base,
                     cache_dir=self.cache_dir,
                     torch_dtype=self._torch_dtype,
+                    device=self.device,
+                    device_map=None,
                 )
             else:
                 self._model = load_model(
@@ -174,7 +212,8 @@ class BaseHFLM(abc.ABC):
                     torch_dtype=self._torch_dtype,
                 )
 
-            if self.device is not None:
+            # Don't .to(device) if the model is already sharded/mapped
+            if self.device is not None and getattr(self._model, "hf_device_map", None) is None:
                 self._model.to(self.device)
 
         return self._model, self._processor
@@ -185,7 +224,6 @@ class BaseHFLM(abc.ABC):
 
         prepared = dict(inputs)
 
-        # Image token id resolution (works for many HF processors; for LLaVA it may be None)
         image_token_id = drop_config.get("image_token_id")
         if image_token_id is None:
             image_token_id = resolve_image_token_id(processor, model)
@@ -203,13 +241,7 @@ class BaseHFLM(abc.ABC):
                 replace_id=replace_id,
             )
 
-        # Patch-drop: support both HF key ('pixel_values') and LLaVA key ('images')
-        tensor_key = None
-        if "pixel_values" in prepared:
-            tensor_key = "pixel_values"
-        elif "images" in prepared:
-            tensor_key = "images"
-
+        tensor_key = "pixel_values" if "pixel_values" in prepared else ("images" if "images" in prepared else None)
         if tensor_key is not None:
             pixel_values = prepared[tensor_key]
             patch_size = drop_config.get("pixel_patch_size")
@@ -218,7 +250,7 @@ class BaseHFLM(abc.ABC):
             fill_value = drop_config.get("pixel_patch_fill", 0.0)
             seed = drop_config.get("pixel_patch_seed")
 
-            updated = drop_pixel_patches(
+            prepared[tensor_key] = drop_pixel_patches(
                 pixel_values,
                 patch_size=patch_size,
                 drop_fraction=drop_fraction,
@@ -226,7 +258,6 @@ class BaseHFLM(abc.ABC):
                 fill_value=fill_value,
                 seed=seed,
             )
-            prepared[tensor_key] = updated
 
         return prepared
 

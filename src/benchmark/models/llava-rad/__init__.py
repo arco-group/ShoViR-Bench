@@ -32,7 +32,7 @@ class LLaVARad(BaseHFLM):
 
 MODEL_SPEC = ModelSpec(
     key="llava-rad",
-    model_id="microsoft/llava-rad",
+    model_id="X-iZhang/libra-llava-rad",
     prompt_key="llava-rad_default",
     task="image-to-text",
     supports_images=True,

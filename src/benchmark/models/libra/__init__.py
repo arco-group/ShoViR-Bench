@@ -8,8 +8,8 @@ class Libra(BaseHFLM):
 
 MODEL_SPEC = ModelSpec(
     key="libra",
-    model_id="TODO",
-    prompt_key="medgemma_default",
+    model_id="X-iZhang/libra-v1.0-3b",
+    prompt_key="libra_default",
     task="image-to-text",
     supports_images=True,
 )
