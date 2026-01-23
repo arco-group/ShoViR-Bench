@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 
 from ..base import BaseHFLM
@@ -5,14 +7,14 @@ from ..chat_template import _prepare_inputs
 from ..spec import ModelSpec
 
 
-class Maira2(BaseHFLM):
+class NVReasonCXR(BaseHFLM):
     def build_chat_inputs(
         self,
         processor,
         image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "Provide a comprehensive image analysis, and list all abnormalities.",
         device: str | None = None,
         torch_dtype=None,
     ):
@@ -21,21 +23,21 @@ class Maira2(BaseHFLM):
         if torch_dtype is None:
             torch_dtype = self._torch_dtype
 
-        indication = prompt_text
-        if user_text and user_text != "Analyze this image.":
-            indication = f"{prompt_text}\n{user_text}"
+        message_text = prompt_text
+        if user_text and user_text != "Provide a comprehensive image analysis, and list all abnormalities.":
+            message_text = user_text
 
-        inputs = processor.format_and_preprocess_reporting_input(
-            current_frontal=image,
-            current_lateral=None,
-            prior_frontal=None,
-            indication=indication,
-            technique="",
-            comparison="",
-            prior_report=None,
-            return_tensors="pt",
-            get_grounding=False,
-        )
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": message_text},
+                ],
+            }
+        ]
+        text = processor.apply_chat_template(messages, add_generation_prompt=True)
+        inputs = processor(text=text, images=[image], return_tensors="pt")
 
         input_lens = None
         if "attention_mask" in inputs and inputs["attention_mask"] is not None:
@@ -47,7 +49,8 @@ class Maira2(BaseHFLM):
                 dtype=torch.long,
             )
 
-        inputs = _prepare_inputs(inputs, device=device, torch_dtype=torch_dtype)
+        inputs = _prepare_inputs(inputs, device=device, dtype=torch_dtype)
+        inputs.pop("num_crops", None)
 
         if input_lens is not None and input_lens.numel() == 1:
             input_lens = int(input_lens.item())
@@ -55,13 +58,13 @@ class Maira2(BaseHFLM):
 
 
 MODEL_SPEC = ModelSpec(
-    key="maira-2",
-    model_id="microsoft/maira-2",
-    prompt_key="maira2_default",
+    key="nv-reason-cxr-3b",
+    model_id="nvidia/NV-Reason-CXR-3B",
+    prompt_key="nv_reason_default",
     task="image-to-text",
-    generation_max_tokens = 450,
-    caching = True,
     supports_images=True,
+    generation_max_tokens=2048,
+    caching=False,
 )
 
-MODEL_CLASS = Maira2
+MODEL_CLASS = NVReasonCXR

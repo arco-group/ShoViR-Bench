@@ -92,6 +92,7 @@ class BaseHFLM(abc.ABC):
         output_ids = output_ids[:, input_len:]
 
         decoded = processor.batch_decode(output_ids, skip_special_tokens=True)
+        # Convert the model output into plain text
         return [{"generated_text": text} for text in decoded]
 
     def prepare_inputs(
@@ -128,7 +129,6 @@ class BaseHFLM(abc.ABC):
         if torch_dtype is None:
             torch_dtype = self._torch_dtype
 
-        # Generic HF path: prefer chat_template if available, else processor(images,text)
         if hasattr(processor, "apply_chat_template"):
             messages = build_chat_messages(prompt_text, image, user_text=user_text)
             try:
@@ -169,12 +169,15 @@ class BaseHFLM(abc.ABC):
     def _default_preprocess(self, image: Image.Image) -> Image.Image:
         """Default preprocessing: normalize to [0,1], convert to uint8, convert to RGB."""
         arr = np.array(image, dtype=np.float32)
+        # Normalize to [0, 1]
         arr_min, arr_max = arr.min(), arr.max()
         if arr_max - arr_min > 0:
             arr = (arr - arr_min) / (arr_max - arr_min)
         else:
             arr = np.zeros_like(arr)
+        # Convert to uint8 [0, 255]
         arr = (arr * 255).astype(np.uint8)
+        # Convert back to PIL Image and ensure RGB
         image = Image.fromarray(arr)
         return image.convert("RGB")
 
@@ -284,6 +287,7 @@ class BaseHFLM(abc.ABC):
             task=model_spec.task,
             generation_max_tokens=model_spec.generation_max_tokens,
             caching=model_spec.caching,
+            
         )
         image = Image.open(args.image)
         output = model(image, prompt)

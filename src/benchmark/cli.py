@@ -1,10 +1,8 @@
 from __future__ import annotations
-
 import argparse
 from pathlib import Path
-
 from .config import BenchmarkConfig
-from .hf_runner import run_inference, write_jsonl
+from .hf_runner import run_inference, run_inference_streaming, write_jsonl
 from .io import iter_images, list_images
 from .models import MODEL_SPECS
 
@@ -34,6 +32,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default=None)
     parser.add_argument("--dtype", default=None)
     parser.add_argument("--trust-remote-code", action="store_true")
+
+    # Parallel inference options
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Enable parallel image loading (recommended for large datasets)",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=8,
+        help="Number of parallel image loading workers (default: 4)",
+    )
+    parser.add_argument(
+        "--prefetch",
+        type=int,
+        default=8,
+        help="Number of images to prefetch ahead (default: 8)",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bar",
+    )
     return parser
 
 
@@ -66,9 +88,30 @@ def main() -> int:
     if config.max_images is not None:
         image_paths = image_paths[: config.max_images]
 
-    images = ((str(path), image) for path, image in iter_images(image_paths))
-    results = run_inference(config, images)
-    write_jsonl(config.output_path, results)
+    print(f"Model: {args.model}")
+    print(f"Images: {len(image_paths)}")
+    print(f"Output: {output_path}")
+    print(f"Parallel: {args.parallel}")
+    print()
+
+    if args.parallel:
+        # Use parallel loading with streaming output (supports resume)
+        count = run_inference_streaming(
+            config,
+            image_paths,
+            output_path,
+            num_workers=args.num_workers,
+            prefetch_count=args.prefetch,
+            show_progress=not args.no_progress,
+        )
+        print(f"\nProcessed {count} images")
+    else:
+        # Original sequential inference
+        images = ((str(path), image) for path, image in iter_images(image_paths))
+        results = run_inference(config, images)
+        write_jsonl(config.output_path, results)
+        print(f"\nProcessed {len(results)} images")
+
     return 0
 
 

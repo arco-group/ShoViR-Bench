@@ -10,3 +10,4 @@ class ModelSpec:
     supports_images: bool = True
     generation_max_tokens: int = 128
     caching: bool = False
+

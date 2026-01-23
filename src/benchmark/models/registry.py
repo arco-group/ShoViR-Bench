@@ -6,10 +6,12 @@ from .libra import MODEL_CLASS as LIBRA_CLASS
 from .libra import MODEL_SPEC as LIBRA_SPEC
 from .maira_2 import MODEL_CLASS as MAIRA2_CLASS
 from .maira_2 import MODEL_SPEC as MAIRA2_SPEC
-from .mambaxray import MODEL_CLASS as MAMBAXRAY_CLASS
-from .mambaxray import MODEL_SPEC as MAMBAXRAY_SPEC
 from .medgemma import MODEL_CLASS as MEDGEMMA_CLASS
 from .medgemma import MODEL_SPEC as MEDGEMMA_SPEC
+from .nv_reason_cxr import MODEL_CLASS as NV_REASON_CLASS
+from .nv_reason_cxr import MODEL_SPEC as NV_REASON_SPEC
+from .radialog import MODEL_CLASS as RADIALOG_CLASS
+from .radialog import MODEL_SPEC as RADIALOG_SPEC
 from .spec import ModelSpec
 
 MODEL_SPECS: dict[str, ModelSpec] = {
@@ -18,7 +20,8 @@ MODEL_SPECS: dict[str, ModelSpec] = {
     LIBRA_SPEC.key: LIBRA_SPEC,
     CXRMATEED_SPEC.key: CXRMATEED_SPEC,
     CHEXAGENT_SPEC.key: CHEXAGENT_SPEC,
-    MAMBAXRAY_SPEC.key: MAMBAXRAY_SPEC,
+    NV_REASON_SPEC.key: NV_REASON_SPEC,
+    RADIALOG_SPEC.key: RADIALOG_SPEC,
 }
 
 MODEL_CLASSES = {
@@ -27,5 +30,6 @@ MODEL_CLASSES = {
     LIBRA_SPEC.key: LIBRA_CLASS,
     CXRMATEED_SPEC.key: CXRMATEED_CLASS,
     CHEXAGENT_SPEC.key: CHEXAGENT_CLASS,
-    MAMBAXRAY_SPEC.key: MAMBAXRAY_CLASS,
+    NV_REASON_SPEC.key: NV_REASON_CLASS,
+    RADIALOG_SPEC.key: RADIALOG_CLASS,
 }

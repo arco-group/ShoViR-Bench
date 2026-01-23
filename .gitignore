@@ -1,4 +1,5 @@
 .venv_RRG/
+.venv_nv/
 .venv/
 __pycache__/
 *.pyc
@@ -9,3 +10,4 @@ data/
 .vscode/launch.json
 SC_Libra_venv/
 .SC_Libra_venv/
+RaDialog-interactive-radiology-report-generation
