@@ -9,4 +9,3 @@ data/
 .vscode/launch.json
 SC_Libra_venv/
 .SC_Libra_venv/
-requirements*.txt
