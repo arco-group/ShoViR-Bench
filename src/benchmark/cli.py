@@ -7,6 +7,7 @@ from .config import BenchmarkConfig
 from .hf_runner import run_inference, write_jsonl
 from .io import iter_images, list_images
 from .models import MODEL_SPECS
+import json
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,7 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--data_json", required=True, help="json that contains all the image info and labels")
     parser.add_argument("--data", required=True, help="Path to radiology image folder")
     parser.add_argument(
-        "--experiment", required=True, help="Experiment name used in output path"
+        "--experiment", required=True, help="Experiment name used in output path" #add possibilities
     )
     parser.add_argument(
         "--output",
@@ -55,6 +56,7 @@ def main() -> int:
         model_key=args.model,
         data_json=Path(args.data_json),
         data_dir=Path(args.data),
+        experiment=args.experiment,
         output_path=output_path,
         cache_dir=Path(args.cache_dir),
         prompt_key=args.prompt_key,
@@ -64,12 +66,10 @@ def main() -> int:
         trust_remote_code=args.trust_remote_code,
     )
 
-    image_paths = list_images(config.data_dir)
-    if config.max_images is not None:
-        image_paths = image_paths[: config.max_images]
+    with Path(args.data_json).open("r", encoding="utf-8") as f:
+        dataset = json.load(f)
 
-    images = ((str(path), image) for path, image in iter_images(image_paths))
-    results = run_inference(config, images)
+    results = run_inference(config, dataset)
     write_jsonl(config.output_path, results)
     return 0
 

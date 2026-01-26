@@ -10,6 +10,7 @@ class BenchmarkConfig:
     model_key: str
     data_json: Path
     data_dir: Path
+    experiment: str
     output_path: Path
     cache_dir: Path = Path("./model_caching")
     prompt_key: Optional[str] = None

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable, Mapping
 
 from .config import BenchmarkConfig, InferenceResult
 from .models import MODEL_CLASSES, MODEL_SPECS
 from .prompts import PROMPTS
+from .preprocess import _resolve_preprocess
 
 
 def _build_model_instance(config: BenchmarkConfig):
@@ -33,19 +34,38 @@ def _resolve_prompt(config: BenchmarkConfig) -> tuple[str, str]:
 
 def run_inference(
     config: BenchmarkConfig,
-    images: Iterable[tuple[str, object]],
+    dataset: Mapping[str, Mapping[str, Any]],
 ) -> list[InferenceResult]:
     spec = MODEL_SPECS[config.model_key]
     prompt_key, prompt_text = _resolve_prompt(config)
+    preprocess_fn = _resolve_preprocess(config.experiment)
     model = _build_model_instance(config)
 
     results: list[InferenceResult] = []
-    for image_path, image in images:
+    processed = 0
+
+    for _sample_id, sample in dataset.items():
+        rel_img_path = sample.get("img_path")
+        if not rel_img_path:
+            continue
+
+        # Create a mutable copy and inject data_dir for the preprocess stage
+        sample_with_ctx = dict(sample)
+        sample_with_ctx["data_dir"] = str(config.data_dir)
+
+        try:
+            # Preprocess is now responsible for reading the image from disk
+            image = preprocess_fn(sample_with_ctx)
+        except Exception:
+            # Skip unreadable samples / preprocessing failures
+            continue
+
         output = model(image, prompt_text)
         response_text = _extract_text(output)
+
         results.append(
             InferenceResult(
-                image_path=image_path,
+                image_path=str(rel_img_path),
                 model_key=spec.key,
                 model_id=spec.model_id,
                 prompt_key=prompt_key,
@@ -53,6 +73,11 @@ def run_inference(
                 response_text=response_text,
             )
         )
+
+        processed += 1
+        if config.max_images is not None and processed >= config.max_images:
+            break
+
     return results
 
 
@@ -63,13 +88,16 @@ def write_jsonl(path: Path, results: Iterable[InferenceResult]) -> None:
             handle.write(json.dumps(item.__dict__, ensure_ascii=True) + "\n")
 
 
-def _extract_text(output) -> str:
+def _extract_text(output: Any) -> str:
     if isinstance(output, list):
         if not output:
             return ""
-        if isinstance(output[0], dict):
-            return output[0].get("generated_text", "")
-        return str(output[0])
+        first = output[0]
+        if isinstance(first, dict):
+            return first.get("generated_text", "")
+        return str(first)
+
     if isinstance(output, dict):
         return output.get("generated_text", "")
+
     return str(output)

@@ -59,11 +59,6 @@ class Libra(BaseHFLM):
         self._image_processor = image_processor
         return self._model, self._tokenizer
 
-    def preprocess_image(self, image: Image.Image) -> Image.Image:
-        if self.image_preprocess is not None:
-            return self.image_preprocess(image)
-        return image.convert("RGB")
-
     def _build_prompt(self, query: str) -> str:
         from libra.conversation import conv_templates
 
@@ -128,10 +123,8 @@ class Libra(BaseHFLM):
         from libra.mm_utils import tokenizer_image_token, KeywordsStoppingCriteria
 
         model, tokenizer = self._ensure_loaded()
-
-        # Preprocess images
-        cur = self.preprocess_image(image)
-        prior = self.preprocess_image(prior_image) if prior_image is not None else None
+        cur=image
+        prior = prior_image if prior_image is not None else None
 
         # Build qs like upstream
         qs = (user_text or "").strip()
