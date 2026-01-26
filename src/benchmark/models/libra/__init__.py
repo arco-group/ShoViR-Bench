@@ -64,7 +64,7 @@ class Libra(BaseHFLM):
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         if self.image_preprocess is not None:
             return self.image_preprocess(image)
-        return image.convert("RGB")
+        return self._default_preprocess(image=image)
 
     def _build_prompt(self, query: str) -> str:
         from libra.conversation import conv_templates
@@ -116,7 +116,7 @@ class Libra(BaseHFLM):
         image: Image.Image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "Analyze this CXR image.",
         prior_image: Image.Image | None = None,
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
@@ -176,7 +176,7 @@ class Libra(BaseHFLM):
             output_ids = model.generate(
                 input_ids=input_ids,
                 images=image_tensor,
-                do_sample=False,
+                do_sample=True,
                 max_new_tokens=self.generation_max_tokens,
                 stopping_criteria=[stopping_criteria],
                 use_cache=self.caching,
