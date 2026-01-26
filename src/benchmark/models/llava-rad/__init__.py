@@ -70,7 +70,7 @@ class LLaVARad(BaseHFLM):
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         if self.image_preprocess is not None:
             return self.image_preprocess(image)
-        return image.convert("RGB")
+        return self._default_preprocess(image)
 
     def _prepare_images(self, cur: Image.Image, prior: Image.Image | None) -> torch.Tensor:
         """
