@@ -24,9 +24,12 @@ class Libra(BaseHFLM):
     # Model name string used by the Libra builder
     model_name: str = "libra-v1.0-3b"
 
+
     # Upstream selects this for libra-v1.0-3b
-    #CHANGE with prompt
-    conv_mode: str = "libra_llama_3"
+    # CHANGE with prompt
+    conv_mode: str = "libra_llama_3" if model_name=="libra-v1.0-3b" else "libra_v1" if "libra-v1.0-7b" else None
+    if not conv_mode:
+        raise Exception
 
     def _ensure_loaded(self):
         if self._model is not None:
@@ -116,7 +119,7 @@ class Libra(BaseHFLM):
         image: Image.Image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this CXR image.",
+        user_text: str = "",
         prior_image: Image.Image | None = None,
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
@@ -197,7 +200,7 @@ class Libra(BaseHFLM):
 
 MODEL_SPEC = ModelSpec(
     key="libra",
-    model_id="X-iZhang/libra-v1.0-3b",
+    model_id="X-iZhang/libra-v1.0-7b",
     prompt_key="libra_default",
     task="image-to-text",
     generation_max_tokens=300,

@@ -8,9 +8,9 @@ from typing import Optional
 @dataclass
 class BenchmarkConfig:
     model_key: str
-    data_json: Path
     data_dir: Path
     output_path: Path
+    data_json: Optional[Path] = None
     cache_dir: Path = Path("./model_caching")
     prompt_key: Optional[str] = None
     max_images: Optional[int] = None

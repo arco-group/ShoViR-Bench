@@ -12,7 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Radiology image benchmark using Hugging Face models."
     )
     parser.add_argument("--model", required=True, choices=sorted(MODEL_SPECS.keys()))
-    parser.add_argument("--data_json", required=True, help="json that contains all the image info and labels")
+    parser.add_argument("--data_json", required=False, default="", help="json that contains all the image info and labels")
     parser.add_argument("--data_dir", required=True, help="Path to the image folder")
     parser.add_argument(
         "--experiment", required=True, help="Experiment name used in output path"
@@ -79,9 +79,9 @@ def main() -> int:
 
     config = BenchmarkConfig(
         model_key=args.model,
-        data_json=Path(args.data_json),
         data_dir=Path(args.data_dir),
         output_path=output_path,
+        data_json=Path(args.data_json) if args.data_json else None,
         cache_dir=Path(args.cache_dir),
         prompt_key=args.prompt_key,
         max_images=args.max_images,
