@@ -15,21 +15,18 @@ sys.path.insert(0, "libra")
 class Libra(BaseHFLM):
     """
     Wrapper for:
-      - X-iZhang/libra-v1.0-3b
+      - X-iZhang/libra-v1.0-7b
     """
 
     # Libra v1 models typically do not require a separate base model
     model_base: str | None = None
 
     # Model name string used by the Libra builder
-    model_name: str = "libra-v1.0-3b"
+    model_name: str = "libra-v1.0-7b"
 
-
-    # Upstream selects this for libra-v1.0-3b
-    # CHANGE with prompt
-    conv_mode: str = "libra_llama_3" if model_name=="libra-v1.0-3b" else "libra_v1" if "libra-v1.0-7b" else None
-    if not conv_mode:
-        raise Exception
+    # Upstream selects this for libra-v1.0-7b
+    #CHANGE with prompt
+    conv_mode: str = "libra_v1"
 
     def _ensure_loaded(self):
         if self._model is not None:
@@ -63,11 +60,6 @@ class Libra(BaseHFLM):
         self._tokenizer = tokenizer
         self._image_processor = image_processor
         return self._model, self._tokenizer
-
-    def preprocess_image(self, image: Image.Image) -> Image.Image:
-        if self.image_preprocess is not None:
-            return self.image_preprocess(image)
-        return self._default_preprocess(image=image)
 
     def _build_prompt(self, query: str) -> str:
         from libra.conversation import conv_templates
@@ -133,10 +125,8 @@ class Libra(BaseHFLM):
         from libra.mm_utils import tokenizer_image_token, KeywordsStoppingCriteria
 
         model, tokenizer = self._ensure_loaded()
-
-        # Preprocess images
-        cur = self.preprocess_image(image)
-        prior = self.preprocess_image(prior_image) if prior_image is not None else None
+        cur=image
+        prior = prior_image if prior_image is not None else None
 
         # Build qs like upstream
         qs = (user_text or "").strip()
@@ -177,15 +167,17 @@ class Libra(BaseHFLM):
 
         with torch.inference_mode():
             output_ids = model.generate(
-                input_ids=input_ids,
+                input_ids,
                 images=image_tensor,
                 do_sample=True,
-                max_new_tokens=self.generation_max_tokens,
+                temperature=0.2,
+                top_p=None,
+                num_beams=1,
+                max_new_tokens=128,
+                attention_mask=attention_mask, 
+                pad_token_id = tokenizer.pad_token_id,
                 stopping_criteria=[stopping_criteria],
-                use_cache=self.caching,
-                attention_mask=attention_mask,
-                pad_token_id=tokenizer.pad_token_id,
-            )
+                use_cache=True)
 
         input_token_len = input_ids.shape[1]
         outputs = tokenizer.batch_decode(output_ids[:, input_token_len:], skip_special_tokens=True)[0].strip()

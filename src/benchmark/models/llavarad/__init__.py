@@ -67,11 +67,6 @@ class LLaVARad(BaseHFLM):
         self._image_processor = image_processor
         return self._model, self._tokenizer
 
-    def preprocess_image(self, image: Image.Image) -> Image.Image:
-        if self.image_preprocess is not None:
-            return self.image_preprocess(image)
-        return self._default_preprocess(image)
-
     def _prepare_images(self, cur: Image.Image, prior: Image.Image | None) -> torch.Tensor:
         """
         Upstream get_image_tensors behavior:
@@ -101,7 +96,7 @@ class LLaVARad(BaseHFLM):
         image: Image.Image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "",
         prior_image: Image.Image | None = None,
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
@@ -117,8 +112,8 @@ class LLaVARad(BaseHFLM):
         model, tokenizer = self._ensure_loaded()
 
         # Preprocess images
-        cur = self.preprocess_image(image)
-        prior = self.preprocess_image(prior_image) if prior_image is not None else None
+        cur = image
+        prior = prior_image if prior_image is not None else None
 
         # Build qs exactly like upstream
         qs = (user_text or "").strip()
@@ -180,9 +175,9 @@ class LLaVARad(BaseHFLM):
 
 
 MODEL_SPEC = ModelSpec(
-    key="llava_rad",
+    key="llavarad",
     model_id="X-iZhang/libra-llava-rad",
-    prompt_key="llava_rad_default",
+    prompt_key="llavarad_default",
     task="image-to-text",
     generation_max_tokens=300,
     caching=True,

@@ -8,7 +8,9 @@ from typing import Optional
 @dataclass
 class BenchmarkConfig:
     model_key: str
+    data_json: Path
     data_dir: Path
+    experiment: str
     output_path: Path
     data_json: Optional[Path] = None
     cache_dir: Path = Path("./model_caching")

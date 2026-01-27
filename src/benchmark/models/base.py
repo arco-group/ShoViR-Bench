@@ -35,8 +35,7 @@ class BaseHFLM(abc.ABC):
         generation_max_tokens: int = 512,
         caching: bool = False,
         trust_remote_code: bool = False,
-        cache_dir: str | None = None,
-        image_preprocess: Callable[[Image.Image], Image.Image] | None = None,
+        cache_dir: str | None = None
     ) -> None:
         self.device = device
         self.dtype = dtype
@@ -47,7 +46,6 @@ class BaseHFLM(abc.ABC):
         self.task = task
         self.trust_remote_code = trust_remote_code
         self.cache_dir = cache_dir
-        self.image_preprocess = image_preprocess
         self._model = None
         self._processor = None
         self._torch_dtype = _resolve_dtype(dtype) if dtype is not None else None
@@ -103,7 +101,6 @@ class BaseHFLM(abc.ABC):
         user_text: str = "Analyze this image.",
         drop_config: dict[str, object] | None = None,
     ):
-        image = self.preprocess_image(image)
         model, processor = self._ensure_loaded()
         inputs, input_len = self.build_chat_inputs(
             processor,
@@ -120,7 +117,7 @@ class BaseHFLM(abc.ABC):
         image: Image.Image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "",
         device: str | None = None,
         torch_dtype=None,
     ):
@@ -161,25 +158,7 @@ class BaseHFLM(abc.ABC):
             input_lens = int(input_lens.item())
         return inputs, input_lens
 
-    def preprocess_image(self, image: Image.Image) -> Image.Image:
-        if self.image_preprocess is not None:
-            return self.image_preprocess(image)
-        return self._default_preprocess(image)
-
-    def _default_preprocess(self, image: Image.Image) -> Image.Image:
-        """Default preprocessing: normalize to [0,1], convert to uint8, convert to RGB."""
-        arr = np.array(image, dtype=np.float32)
-        # Normalize to [0, 1]
-        arr_min, arr_max = arr.min(), arr.max()
-        if arr_max - arr_min > 0:
-            arr = (arr - arr_min) / (arr_max - arr_min)
-        else:
-            arr = np.zeros_like(arr)
-        # Convert to uint8 [0, 255]
-        arr = (arr * 255).astype(np.uint8)
-        # Convert back to PIL Image and ensure RGB
-        image = Image.fromarray(arr)
-        return image.convert("RGB")
+        
 
     def _ensure_loaded(self):
         if self._processor is None:
