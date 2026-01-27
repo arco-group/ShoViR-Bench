@@ -13,7 +13,7 @@ from ..spec import ModelSpec
 class Libra(BaseHFLM):
     """
     Wrapper for:
-      - X-iZhang/libra-v1.0-3b
+      - X-iZhang/libra-v1.0-7b
     """
 
     # Libra v1 models typically do not require a separate base model
@@ -22,7 +22,7 @@ class Libra(BaseHFLM):
     # Model name string used by the Libra builder
     model_name: str = "libra-v1.0-3b"
 
-    # Upstream selects this for libra-v1.0-3b
+    # Upstream selects this for libra-v1.0-7b
     #CHANGE with prompt
     conv_mode: str = "libra_llama_3"
 
@@ -109,7 +109,7 @@ class Libra(BaseHFLM):
         image: Image.Image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "",
         prior_image: Image.Image | None = None,
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
@@ -165,15 +165,17 @@ class Libra(BaseHFLM):
 
         with torch.inference_mode():
             output_ids = model.generate(
-                input_ids=input_ids,
+                input_ids,
                 images=image_tensor,
-                do_sample=False,
-                max_new_tokens=self.generation_max_tokens,
+                do_sample=True,
+                temperature=0.2,
+                top_p=None,
+                num_beams=1,
+                max_new_tokens=128,
+                attention_mask=attention_mask, 
+                pad_token_id = tokenizer.pad_token_id,
                 stopping_criteria=[stopping_criteria],
-                use_cache=self.caching,
-                attention_mask=attention_mask,
-                pad_token_id=tokenizer.pad_token_id,
-            )
+                use_cache=True)
 
         input_token_len = input_ids.shape[1]
         outputs = tokenizer.batch_decode(output_ids[:, input_token_len:], skip_special_tokens=True)[0].strip()

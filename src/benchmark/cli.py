@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .config import BenchmarkConfig
-from .hf_runner import run_inference, write_jsonl
-from .io import iter_images, list_images
+from .hf_runner import run_inference, write_json
 from .models import MODEL_SPECS
-import json
+from .preprocess import PREPROCESS, _resolve_preprocess
+
+
+def _validate_experiment(value: str) -> str:
+    """
+    Validate experiment string by trying to resolve the preprocess function.
+    This supports both static keys (baseline, all_noise, ...) and parametric keys
+    like ObjectClassOcclusion_pXX.
+    """
+    _resolve_preprocess(value)  # raises KeyError if invalid
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -15,15 +25,28 @@ def build_parser() -> argparse.ArgumentParser:
         description="Radiology image benchmark using Hugging Face models."
     )
     parser.add_argument("--model", required=True, choices=sorted(MODEL_SPECS.keys()))
-    parser.add_argument("--data_json", required=True, help="json that contains all the image info and labels")
-    parser.add_argument("--data", required=True, help="Path to radiology image folder")
     parser.add_argument(
-        "--experiment", required=True, help="Experiment name used in output path" #add possibilities
+        "--data_json",
+        required=True,
+        help="JSON file containing all image info and labels (sample_id -> sample dict).",
     )
+    parser.add_argument("--data", required=True, help="Path to radiology image folder")
+    static_experiments = sorted(PREPROCESS.keys())
+    parser.add_argument(
+        "--experiment",
+        required=True,
+        type=_validate_experiment,
+        help=(
+            "Experiment name used to select preprocessing. "
+            f"Static options: {static_experiments}. "
+            "Parametric option: ObjectClassOcclusion_pXX (XX in 0..100)."
+        ),
+    )
+
     parser.add_argument(
         "--output",
         default=None,
-        help="Explicit output JSONL path (overrides --output-dir/--experiment)",
+        help="Explicit output JSON path (overrides --output-dir/--experiment).",
     )
     parser.add_argument(
         "--output-dir",
@@ -39,17 +62,28 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _build_output_path(output_dir: str, experiment: str, model_key: str) -> Path:
-    return Path(output_dir) / experiment / f"{model_key}.jsonl"
+def _safe_path_segment(value: str) -> str:
+    """Make a string safe to be used inside filenames/paths."""
+    return value.replace("/", "__").replace("\\", "__").replace(" ", "_")
+
+
+def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str) -> Path:
+    model_id_seg = _safe_path_segment(model_id)
+    prompt_key_seg = _safe_path_segment(prompt_key)
+    filename = f"{model_id_seg}_{prompt_key_seg}.json"
+    return Path(output_dir) / experiment / filename
+
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    spec = MODEL_SPECS[args.model]
+    prompt_key = args.prompt_key or spec.prompt_key
     output_path = (
         Path(args.output)
         if args.output is not None
-        else _build_output_path(args.output_dir, args.experiment, args.model)
+        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key)
     )
 
     config = BenchmarkConfig(
@@ -70,7 +104,7 @@ def main() -> int:
         dataset = json.load(f)
 
     results = run_inference(config, dataset)
-    write_jsonl(config.output_path, results)
+    write_json(config.output_path, results)
     return 0
 
 

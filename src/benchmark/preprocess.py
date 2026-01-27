@@ -82,7 +82,7 @@ def _robust_center_scale_rgb(
     pixels_rgb: np.ndarray,
     *,
     low_q: float = 1.0,
-    high_q: float = 90.0,
+    high_q: float = 99.0,
     min_std: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -137,7 +137,7 @@ def _matched_correlated_noise_fill(
         outside = np.ones((h, w), dtype=bool)
 
     out_pixels = img_arr[outside]  # [N,3]
-    center, scale = _robust_center_scale_rgb(out_pixels, low_q=1.0, high_q=90.0, min_std=1.0)
+    center, scale = _robust_center_scale_rgb(out_pixels, low_q=1.0, high_q=99.0, min_std=1.0)
 
     noise = np.random.randn(h, w, 3).astype(np.float32) * scale + center
     noise = np.clip(noise, 0.0, 255.0).astype(np.uint8)

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .config import BenchmarkConfig, InferenceResult
+from .config import BenchmarkConfig
 from .models import MODEL_CLASSES, MODEL_SPECS
 from .prompts import PROMPTS
 from .preprocess import _resolve_preprocess
@@ -35,13 +35,12 @@ def _resolve_prompt(config: BenchmarkConfig) -> tuple[str, str]:
 def run_inference(
     config: BenchmarkConfig,
     dataset: Mapping[str, Mapping[str, Any]],
-) -> list[InferenceResult]:
-    spec = MODEL_SPECS[config.model_key]
-    prompt_key, prompt_text = _resolve_prompt(config)
+) -> list[dict[str, str]]:
+
+    _prompt_key, prompt_text = _resolve_prompt(config)
     preprocess_fn = _resolve_preprocess(config.experiment)
     model = _build_model_instance(config)
-
-    results: list[InferenceResult] = []
+    results: list[dict[str, str]] = []
     processed = 0
 
     for _sample_id, sample in dataset.items():
@@ -49,29 +48,23 @@ def run_inference(
         if not rel_img_path:
             continue
 
-        # Create a mutable copy and inject data_dir for the preprocess stage
         sample_with_ctx = dict(sample)
         sample_with_ctx["data_dir"] = str(config.data_dir)
 
         try:
-            # Preprocess is now responsible for reading the image from disk
-            image = preprocess_fn(sample_with_ctx)
+            image = preprocess_fn(sample_with_ctx) 
         except Exception:
-            # Skip unreadable samples / preprocessing failures
             continue
 
         output = model(image, prompt_text)
-        response_text = _extract_text(output)
-
+        predictions = _extract_text(output)
+        references = sample.get("report", "")
         results.append(
-            InferenceResult(
-                image_path=str(rel_img_path),
-                model_key=spec.key,
-                model_id=spec.model_id,
-                prompt_key=prompt_key,
-                prompt_text=prompt_text,
-                response_text=response_text,
-            )
+            {
+                "image_path": str(rel_img_path),
+                "predictions": predictions,
+                "references": references,
+            }
         )
 
         processed += 1
@@ -81,11 +74,13 @@ def run_inference(
     return results
 
 
-def write_jsonl(path: Path, results: Iterable[InferenceResult]) -> None:
+def write_json(path: Path, results: Iterable[dict[str, str]]) -> None:
+    """
+    Write a single JSON array, not JSONL.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-        for item in results:
-            handle.write(json.dumps(item.__dict__, ensure_ascii=True) + "\n")
+        json.dump(list(results), handle, ensure_ascii=True, indent=2)
 
 
 def _extract_text(output: Any) -> str:

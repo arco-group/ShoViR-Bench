@@ -116,7 +116,7 @@ class BaseHFLM(abc.ABC):
         image: Image.Image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "",
         device: str | None = None,
         torch_dtype=None,
     ):

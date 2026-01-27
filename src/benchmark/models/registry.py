@@ -10,6 +10,8 @@ from .mambaxray import MODEL_CLASS as MAMBAXRAY_CLASS
 from .mambaxray import MODEL_SPEC as MAMBAXRAY_SPEC
 from .medgemma import MODEL_CLASS as MEDGEMMA_CLASS
 from .medgemma import MODEL_SPEC as MEDGEMMA_SPEC
+from .llavarad import MODEL_CLASS as LLAVARAD_CLASS
+from .llavarad import MODEL_SPEC as LLAVARAD_SPEC
 from .spec import ModelSpec
 
 MODEL_SPECS: dict[str, ModelSpec] = {
@@ -19,6 +21,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
     CXRMATEED_SPEC.key: CXRMATEED_SPEC,
     CHEXAGENT_SPEC.key: CHEXAGENT_SPEC,
     MAMBAXRAY_SPEC.key: MAMBAXRAY_SPEC,
+    LLAVARAD_SPEC.key: LLAVARAD_SPEC,
 }
 
 MODEL_CLASSES = {
@@ -28,4 +31,5 @@ MODEL_CLASSES = {
     CXRMATEED_SPEC.key: CXRMATEED_CLASS,
     CHEXAGENT_SPEC.key: CHEXAGENT_CLASS,
     MAMBAXRAY_SPEC.key: MAMBAXRAY_CLASS,
+    LLAVARAD_SPEC.key: LLAVARAD_CLASS,
 }
