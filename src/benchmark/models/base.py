@@ -71,7 +71,7 @@ class BaseHFLM(abc.ABC):
         image: Image.Image,
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "",
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
         model, processor, inputs, input_len = self.prepare_inputs(
@@ -167,7 +167,7 @@ class BaseHFLM(abc.ABC):
             )
         if self._model is None:
             self._model = load_model(
-                self.__class__.__name__,
+                #self.__class__.__name__,
                 self.model_id,
                 trust_remote_code=self.trust_remote_code,
                 cache_dir=self.cache_dir,
