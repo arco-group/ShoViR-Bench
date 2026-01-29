@@ -90,6 +90,7 @@ class BaseHFLM(abc.ABC):
         output_ids = output_ids[:, input_len:]
 
         decoded = processor.batch_decode(output_ids, skip_special_tokens=True)
+        # Convert the model output into plain text
         return [{"generated_text": text} for text in decoded]
 
     def prepare_inputs(
@@ -125,7 +126,6 @@ class BaseHFLM(abc.ABC):
         if torch_dtype is None:
             torch_dtype = self._torch_dtype
 
-        # Generic HF path: prefer chat_template if available, else processor(images,text)
         if hasattr(processor, "apply_chat_template"):
             messages = build_chat_messages(prompt_text, image, user_text=user_text)
             try:
@@ -157,6 +157,8 @@ class BaseHFLM(abc.ABC):
         if input_lens is not None and input_lens.numel() == 1:
             input_lens = int(input_lens.item())
         return inputs, input_lens
+
+        
 
     def _ensure_loaded(self):
         if self._processor is None:
@@ -264,6 +266,7 @@ class BaseHFLM(abc.ABC):
             task=model_spec.task,
             generation_max_tokens=model_spec.generation_max_tokens,
             caching=model_spec.caching,
+            
         )
         image = Image.open(args.image)
         output = model(image, prompt)

@@ -1,11 +1,10 @@
 from __future__ import annotations
+from xml.parsers.expat import model
 
 import torch
 from PIL import Image
 import random
-
-from transformers import AutoModelForCausalLM, AutoModelForVision2Seq, AutoProcessor
-
+from transformers import AutoProcessor
 
 def load_processor(
     model_id: str,
@@ -20,26 +19,55 @@ def load_processor(
 
 
 def load_model(
+    model_class_name: str,
     model_id: str,
     trust_remote_code: bool = False,
     cache_dir: str | None = None,
     torch_dtype=None,
 ):
+    class_name = model_class_name
     last_error: Exception | None = None
-    for loader in (AutoModelForVision2Seq, AutoModelForCausalLM):
-        try:
-            return loader.from_pretrained(
-                model_id,
-                trust_remote_code=trust_remote_code,
-                cache_dir=cache_dir,
-                torch_dtype=torch_dtype,
-            )
-        except ValueError as exc:
-            last_error = exc
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError(f"Unable to load model for {model_id}")
 
+    if class_name in ("MedGemma", "Maira2", "CheXagent", "CXRMateED"):
+
+        from transformers import (
+            AutoModelForCausalLM,
+        )
+
+        return AutoModelForCausalLM.from_pretrained(
+            model_id,
+            trust_remote_code=trust_remote_code,
+            cache_dir=cache_dir,
+            torch_dtype=torch_dtype,
+        )
+    elif class_name in ("NVReasonCXR",):
+
+        from transformers import (
+            AutoModelForImageTextToText,
+        )
+        return AutoModelForImageTextToText.from_pretrained(
+            model_id,
+            trust_remote_code=trust_remote_code,
+            cache_dir=cache_dir,
+            torch_dtype=torch_dtype,
+        )
+    elif class_name in ():
+        from transformers import (
+            AutoModelForVision2Seq,
+        )
+        return AutoModelForVision2Seq.from_pretrained(
+            model_id,
+            trust_remote_code=trust_remote_code,
+            cache_dir=cache_dir,
+            torch_dtype=torch_dtype,
+        )
+    else: 
+        raise Exception(f"Unknown model class name: {class_name}")
+ 
+
+
+    
+    
 
 def build_chat_messages(
     prompt_text: str,
@@ -61,7 +89,7 @@ def build_chat_messages(
     ]
 
 
-def build_chat_inputs(
+def _build_chat_inputs_for_generation(
     processor,
     image: Image.Image,
     prompt_text: str,
@@ -69,7 +97,6 @@ def build_chat_inputs(
     torch_dtype=None,
     user_text: str = "Analyze this image.",
 ):
-        # --- Build inputs ---
     if hasattr(processor, "apply_chat_template"):
         messages = build_chat_messages(prompt_text, image, user_text=user_text)
         try:
@@ -85,26 +112,19 @@ def build_chat_inputs(
     else:
         inputs = processor(images=image, text=prompt_text, return_tensors="pt")
 
-    # --- Compute *true* prompt lengths (per sample) ---
     input_lens = None
     if "attention_mask" in inputs and inputs["attention_mask"] is not None:
-        # attention_mask: (B, T) with 1s on real tokens and 0s on padding
-        input_lens = inputs["attention_mask"].sum(dim=-1).to(torch.long)  # (B,)
+        input_lens = inputs["attention_mask"].sum(dim=-1).to(torch.long)
     elif "input_ids" in inputs and inputs["input_ids"] is not None:
-        # Fallback: assumes no padding. If padding exists, this will be wrong.
         input_lens = torch.full(
             (inputs["input_ids"].shape[0],),
             inputs["input_ids"].shape[-1],
             dtype=torch.long,
         )
 
-    # Move to device / dtype
     inputs = _prepare_inputs(inputs, device=device, torch_dtype=torch_dtype)
-
-    # Avoid passing unused kwargs to generate/model forward
     inputs.pop("num_crops", None)
 
-    # For convenience: return int if batch size == 1
     if input_lens is not None and input_lens.numel() == 1:
         input_lens = int(input_lens.item())
     return inputs, input_lens
@@ -119,7 +139,7 @@ def generate_with_template(
     torch_dtype=None,
     user_text: str = "Analyze this image.",
 ) -> list[dict[str, str]]:
-    inputs, _ = build_chat_inputs(
+    inputs, _ = _build_chat_inputs_for_generation(
         processor,
         image,
         prompt_text,

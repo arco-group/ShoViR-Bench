@@ -1,10 +1,17 @@
-PROMPTS = {
-    "chestxray_default": (
-        "Generate a comprehensive chest radiology report, systematically describing all visible anatomy, key findings, and a final impression."
-    ),
 
+PROMPTS = {
     "chexagent_default": (
-        "Structured Radiology Report Generation for Findings Section"
+        "You are an expert radiologist."
+    ),
+    "maira2_default": (
+        "You are an expert radiologist."
+    ),
+    "libra_default": "Provide a detailed description of the findings in the radiology image.",
+    "medgemma_default": (
+        "You are an expert radiologist."
+    ),
+    "nv_reason_default": (
+        "You are an expert radiologist."
     ),
 
         "libra_default": (
@@ -33,5 +40,4 @@ PROMPTS = {
 
     "radiology_minimal": "Generate a complete radiology report for this image."
 }
-
 

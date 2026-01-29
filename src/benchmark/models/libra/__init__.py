@@ -8,7 +8,9 @@ from huggingface_hub import snapshot_download
 
 from ..base import BaseHFLM
 from ..spec import ModelSpec
-
+import sys
+sys.path.insert(0, "Libra")
+sys.path.insert(0, "libra")
 
 class Libra(BaseHFLM):
     """

@@ -1,11 +1,10 @@
 from __future__ import annotations
-
 import argparse
 import json
 from pathlib import Path
-
 from .config import BenchmarkConfig
-from .hf_runner import run_inference, write_json
+from .hf_runner import run_inference, run_inference_streaming, write_jsonl
+from .io import iter_images, list_images
 from .models import MODEL_SPECS
 from .preprocess import PREPROCESS, _resolve_preprocess
 
@@ -59,6 +58,34 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default=None)
     parser.add_argument("--dtype", default=None)
     parser.add_argument("--trust-remote-code", action="store_true")
+
+    # Parallel inference options
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Enable parallel image loading (recommended for large datasets)",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=8,
+        help="Number of parallel image loading workers (default: 4)",
+    )
+    parser.add_argument(
+        "--prefetch",
+        type=int,
+        default=8,
+        help="Number of images to prefetch ahead (default: 8)",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bar",
+    )
+   # TODO aggiungere il fatto che si chiamano diverse configurazioni di esperimenti, come : DOCO, RO, CO, image -level o token-level (da vedere)
+   # TODO 
+
+
     return parser
 
 
@@ -92,6 +119,7 @@ def main() -> int:
         data_dir=Path(args.data),
         experiment=args.experiment,
         output_path=output_path,
+        data_json=Path(args.data_json) if args.data_json else None,
         cache_dir=Path(args.cache_dir),
         prompt_key=args.prompt_key,
         max_images=args.max_images,
