@@ -213,6 +213,8 @@ def all_noise_mean(sample: Sample) -> Image.Image:
 def object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
     """
     Randomly pick one bbox from sample['regions'] and apply matched correlated noise within that bbox.
+
+    This is OCO (Object Class Occlusion) - occludes annotated regions.
     """
     image = _to_uint8_rgb(_load_image_from_sample(sample))
     img_arr = np.array(image, dtype=np.uint8)
@@ -231,6 +233,51 @@ def object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
     return Image.fromarray(out, mode="RGB")
 
 
+def _generate_random_bbox(
+    w: int,
+    h: int,
+    min_size_frac: float = 0.05,
+    max_size_frac: float = 0.25,
+) -> tuple[int, int, int, int]:
+    """Generate a random bounding box within image bounds."""
+    min_w = int(w * min_size_frac)
+    max_w = int(w * max_size_frac)
+    min_h = int(h * min_size_frac)
+    max_h = int(h * max_size_frac)
+
+    box_w = int(np.random.randint(min_w, max_w + 1))
+    box_h = int(np.random.randint(min_h, max_h + 1))
+
+    x1 = int(np.random.randint(0, w - box_w + 1))
+    y1 = int(np.random.randint(0, h - box_h + 1))
+    x2 = x1 + box_w
+    y2 = y1 + box_h
+
+    return x1, y1, x2, y2
+
+
+def random_object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
+    """
+    Apply matched correlated noise to a random region (not based on annotations).
+
+    This is ROCO (Random Object Class Occlusion) - occludes random regions.
+    """
+    image = _to_uint8_rgb(_load_image_from_sample(sample))
+    img_arr = np.array(image, dtype=np.uint8)
+    h, w, _ = img_arr.shape
+
+    if p <= 0.0:
+        return image
+
+    x1, y1, x2, y2 = _generate_random_bbox(w, h)
+    region_mask = np.zeros((h, w), dtype=bool)
+    region_mask[y1:y2, x1:x2] = True
+
+    fill = _matched_correlated_noise_fill(img_arr, region_mask, blur_radius=2.0)
+    out = _blend_region(img_arr, fill, region_mask, p=p, feather_radius=6)
+    return Image.fromarray(out, mode="RGB")
+
+
 # -----------------------------
 # Registry + resolver
 # -----------------------------
@@ -241,18 +288,44 @@ PREPROCESS: Dict[str, PreprocessFn] = {
 }
 
 
+def _parse_experiment_with_p(experiment: str) -> tuple[str, float] | None:
+    """
+    Parse experiment strings like 'oco_p50' or 'roco_p25'.
+
+    Returns (base_name, p_value) or None if no match.
+    """
+    m = re.fullmatch(r"(oco|roco|ObjectClassOcclusion)_p(\d{1,3})", experiment, re.IGNORECASE)
+    if not m:
+        return None
+    base = m.group(1).lower()
+    p_int = max(0, min(int(m.group(2)), 100))
+    return base, p_int / 100.0
+
+
 def _resolve_preprocess(experiment: str) -> PreprocessFn:
     """
     Resolve an experiment string into a preprocessing callable (sample-only).
+
     Supports:
-      - baseline
-      - all_noise
-      - all_noise_mean
-      - ObjectClassOcclusion_pXX  (XX in 0..100)
+      - baseline: No preprocessing, just normalize and convert to RGB
+      - all_noise: Replace entire image with random noise
+      - all_noise_mean: Replace entire image with matched correlated noise
+      - oco_pXX: Object Class Occlusion at strength XX% (uses annotated bboxes)
+      - roco_pXX: Random Object Class Occlusion at strength XX% (random bboxes)
+      - ObjectClassOcclusion_pXX: Legacy alias for oco_pXX
     """
     if experiment in PREPROCESS:
         return PREPROCESS[experiment]
 
+    parsed = _parse_experiment_with_p(experiment)
+    if parsed is not None:
+        base, p = parsed
+        if base in ("oco", "objectclassocclusion"):
+            return lambda sample: object_class_occlusion(sample, p=p)
+        elif base == "roco":
+            return lambda sample: random_object_class_occlusion(sample, p=p)
+
+    # Legacy support
     p = _parse_p_from_experiment(experiment)
     if p is not None:
         return lambda sample: object_class_occlusion(sample, p=p)
