@@ -38,6 +38,6 @@ PROMPTS = {
         "You are to act as a radiologist and write the finding section of a chest x-ray radiology report for this X-ray image. Write in the style of a radiologist, write one fluent text without enumeration, beconcise and don't provide explanations or reasons."
     ),
 
-    "radiology_minimal": "Generate a complete radiology report for this image."
+    "radiology_minimal": "Generate a complete radiology report for this image.",
 }
 

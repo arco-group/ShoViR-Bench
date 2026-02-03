@@ -2,18 +2,30 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from .config import BenchmarkConfig
+from .config import BenchmarkConfig, ExperimentType
 from .hf_runner import run_inference, write_json
 from .io import iter_images, list_images
 from .models import MODEL_SPECS
 from .preprocess import PREPROCESS, _resolve_preprocess
 
 
+EXPERIMENT_HELP = """
+Experiment types:
+  baseline     - No occlusion, process whole image as-is
+  oco_pXX      - Object Class Occlusion at XX%% strength (uses annotated bboxes)
+  roco_pXX     - Random Object Class Occlusion at XX%% strength (random bboxes)
+  all_noise    - Replace entire image with random noise
+  all_noise_mean - Replace entire image with matched correlated noise
+
+Examples: baseline, oco_p50, oco_p100, roco_p25, roco_p75
+"""
+
+
 def _validate_experiment(value: str) -> str:
     """
     Validate experiment string by trying to resolve the preprocess function.
     This supports both static keys (baseline, all_noise, ...) and parametric keys
-    like ObjectClassOcclusion_pXX.
+    like oco_pXX or roco_pXX.
     """
     _resolve_preprocess(value)  # raises KeyError if invalid
     return value
@@ -21,11 +33,14 @@ def _validate_experiment(value: str) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Radiology image benchmark using Hugging Face models."
+        description="Radiology image benchmark using Hugging Face models.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=EXPERIMENT_HELP,
     )
     parser.add_argument("--model", required=True, choices=sorted(MODEL_SPECS.keys()))
     parser.add_argument(
-        "--data_json",
+        "--data-json",
+        dest="data_json",
         required=True,
         help="JSON file containing all image info and labels (sample_id -> sample dict).",
     )
@@ -36,9 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         type=_validate_experiment,
         help=(
-            "Experiment name used to select preprocessing. "
-            f"Static options: {static_experiments}. "
-            "Parametric option: ObjectClassOcclusion_pXX (XX in 0..100)."
+            "Experiment name for preprocessing. "
+            f"Static: {static_experiments}. "
+            "Parametric: oco_pXX, roco_pXX (XX in 0..100)."
         ),
     )
 
@@ -59,32 +74,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dtype", default=None)
     parser.add_argument("--trust-remote-code", action="store_true")
 
-    # Parallel inference options
-    parser.add_argument(
-        "--parallel",
-        action="store_true",
-        help="Enable parallel image loading (recommended for large datasets)",
-    )
-    parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=8,
-        help="Number of parallel image loading workers (default: 4)",
-    )
-    parser.add_argument(
-        "--prefetch",
-        type=int,
-        default=8,
-        help="Number of images to prefetch ahead (default: 8)",
-    )
+
     parser.add_argument(
         "--no-progress",
         action="store_true",
         help="Disable progress bar",
     )
-   # TODO aggiungere il fatto che si chiamano diverse configurazioni di esperimenti, come : DOCO, RO, CO, image -level o token-level (da vedere)
-   # TODO 
-
+    parser.add_argument(
+        "--filter-labels",
+        nargs="+",
+        default=None,
+        help="Filter dataset to only include samples with these CheXpert labels.",
+    )
+    parser.add_argument(
+        "--num-images",
+        type=int,
+        default=1,
+        help="Number of images per inference call (1 = single image, >1 = multi-image). Default: 1.",
+    )
 
     return parser
 
@@ -115,7 +122,6 @@ def main() -> int:
 
     config = BenchmarkConfig(
         model_key=args.model,
-        data_json=Path(args.data_json),
         data_dir=Path(args.data),
         experiment=args.experiment,
         output_path=output_path,
@@ -126,6 +132,8 @@ def main() -> int:
         device=args.device,
         dtype=args.dtype,
         trust_remote_code=args.trust_remote_code,
+        filter_labels=args.filter_labels,
+        num_images=args.num_images,
     )
 
     with Path(args.data_json).open("r", encoding="utf-8") as f:

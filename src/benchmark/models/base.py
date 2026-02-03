@@ -68,12 +68,23 @@ class BaseHFLM(abc.ABC):
 
     def __call__(
         self,
-        image: Image.Image,
+        image: Image.Image | list[Image.Image],
         prompt_text: str,
         *,
         user_text: str = "",
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
+        """Run inference on one image or a batch of independent conversations.
+
+        When *image* is a list, each image becomes its own conversation
+        with the same prompt.  All conversations are padded into a single
+        batch and processed in one ``model.generate()`` call.
+        """
+        if isinstance(image, list):
+            return self._batch_call(
+                image, prompt_text, user_text=user_text, drop_config=drop_config,
+            )
+
         model, processor, inputs, input_len = self.prepare_inputs(
             image,
             prompt_text,
@@ -90,8 +101,118 @@ class BaseHFLM(abc.ABC):
         output_ids = output_ids[:, input_len:]
 
         decoded = processor.batch_decode(output_ids, skip_special_tokens=True)
-        # Convert the model output into plain text
         return [{"generated_text": text} for text in decoded]
+
+    # ------------------------------------------------------------------
+    # Batched inference: N independent conversations, one generate() call
+    # ------------------------------------------------------------------
+    def _batch_call(
+        self,
+        images: list[Image.Image],
+        prompt_text: str,
+        *,
+        user_text: str = "Analyze this image.",
+        drop_config: dict[str, object] | None = None,
+    ) -> list[dict[str, str]]:
+        model, processor = self._ensure_loaded()
+
+        # Build each conversation independently
+        all_messages = [
+            build_chat_messages(prompt_text, img, user_text=user_text)
+            for img in images
+        ]
+
+        # Try batched apply_chat_template (HF ≥ 4.44 supports list-of-conversations)
+        if hasattr(processor, "apply_chat_template"):
+            try:
+                inputs = processor.apply_chat_template(
+                    all_messages,
+                    add_generation_prompt=True,
+                    tokenize=True,
+                    padding=True,
+                    return_dict=True,
+                    return_tensors="pt",
+                )
+            except Exception:
+                # Fallback: process individually and pad manually
+                inputs = self._manual_batch(processor, images, prompt_text)
+        else:
+            inputs = self._manual_batch(processor, images, prompt_text)
+
+        if drop_config:
+            inputs = self._apply_drop_config(inputs, processor, model, drop_config)
+
+        # Compute per-sequence input lengths from attention_mask
+        if "attention_mask" in inputs and inputs["attention_mask"] is not None:
+            input_lens = inputs["attention_mask"].sum(dim=-1).to(torch.long)
+        elif "input_ids" in inputs and inputs["input_ids"] is not None:
+            input_lens = torch.full(
+                (inputs["input_ids"].shape[0],),
+                inputs["input_ids"].shape[-1],
+                dtype=torch.long,
+            )
+        else:
+            input_lens = None
+
+        inputs = _prepare_inputs(inputs, device=self.device, torch_dtype=self._torch_dtype)
+        inputs.pop("num_crops", None)
+
+        with torch.no_grad():
+            output_ids = model.generate(
+                **inputs,
+                max_new_tokens=self.generation_max_tokens,
+                do_sample=False,
+                use_cache=self.caching,
+            )
+
+        # Slice generated tokens per sequence
+        results = []
+        for i in range(output_ids.shape[0]):
+            seq_input_len = int(input_lens[i].item()) if input_lens is not None else 0
+            generated = output_ids[i, seq_input_len:]
+            text = processor.decode(generated, skip_special_tokens=True)
+            results.append({"generated_text": text})
+        return results
+
+    def _manual_batch(self, processor, images, prompt_text):
+        """Fallback: process each image individually, then pad into a batch."""
+        batch_input_ids = []
+        batch_attention = []
+        batch_pixel = []
+
+        for img in images:
+            single = processor(images=img, text=prompt_text, return_tensors="pt")
+            batch_input_ids.append(single["input_ids"].squeeze(0))
+            if "attention_mask" in single:
+                batch_attention.append(single["attention_mask"].squeeze(0))
+            if "pixel_values" in single:
+                batch_pixel.append(single["pixel_values"].squeeze(0))
+
+        # Pad input_ids and attention_mask to the same length
+        pad_id = getattr(processor, "pad_token_id", None)
+        if pad_id is None:
+            tok = getattr(processor, "tokenizer", processor)
+            pad_id = getattr(tok, "pad_token_id", 0) or 0
+
+        max_len = max(ids.shape[-1] for ids in batch_input_ids)
+        padded_ids = []
+        padded_attn = []
+        for i, ids in enumerate(batch_input_ids):
+            pad_len = max_len - ids.shape[-1]
+            padded_ids.append(
+                torch.nn.functional.pad(ids, (pad_len, 0), value=pad_id)
+            )
+            if batch_attention:
+                padded_attn.append(
+                    torch.nn.functional.pad(batch_attention[i], (pad_len, 0), value=0)
+                )
+
+        result = {"input_ids": torch.stack(padded_ids)}
+        if padded_attn:
+            result["attention_mask"] = torch.stack(padded_attn)
+        if batch_pixel:
+            result["pixel_values"] = torch.stack(batch_pixel)
+        return result
 
     def prepare_inputs(
         self,

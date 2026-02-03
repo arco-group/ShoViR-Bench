@@ -2,17 +2,27 @@
 Organize PadChest-GR dataset by CheXpert labels for evaluation.
 
 This script creates files organized by CheXpert label where:
-- Each sample has a "main_bbox" with the target CheXpert label
-- Each sample includes "other_bboxes" in the same image (can be same or different labels)
-- False negatives are filtered out using text analysis of bbox annotations
+- Each image contains all verified bounding boxes (regions)
 - CheXbert verifies the PadChest→CheXpert label remapping before saving
+- Both main output and per-category files use the same imagenome format
 
 Output structure:
     data/padchest-gr/chexpert-by-label/
-    ├── verified_samples.json       # All verified samples (all categories)
-    ├── discarded_samples.json      # Samples discarded by verifier
-    ├── {Category}_samples.json     # Samples per category
+    ├── verified_samples.json       # All verified images with regions
+    ├── {Category}_samples.json     # Images with regions for that category
     └── summary.json                # Overall statistics
+
+Sample format (imagenome-style):
+    {
+        "image_id": {
+            "img_path": "...",
+            "report": "combined descriptions",
+            "labels": [14 CheXbert labels],
+            "regions": [
+                {"anatomy": "...", "bbox": [...], "findings": [...], "chexpert_categories": [...]}
+            ]
+        }
+    }
 """
 
 import json
@@ -75,13 +85,16 @@ class CheXbertLabelVerifier:
             'Support Devices': 12,
         }
 
+        # Number of CheXbert conditions (14 total, but we use 13 for evaluation)
+        self.num_conditions = 14
+
         print("CheXbert verifier loaded successfully")
 
     def verify_batch(
         self,
         sentences: List[str],
         chexpert_categories: List[str],
-    ) -> List[Tuple[bool, str, float]]:
+    ) -> Tuple[List[Tuple[bool, str, float]], List[List[int]]]:
         """
         Verify a batch of sentences against their expected CheXpert categories.
 
@@ -90,14 +103,24 @@ class CheXbertLabelVerifier:
             chexpert_categories: List of expected CheXpert categories
 
         Returns:
-            List of (is_verified, reason, confidence) tuples
+            Tuple of:
+            - List of (is_verified, reason, confidence) tuples
+            - List of label vectors (14 integers each: 0=blank, 1=positive, 2=negative, 3=uncertain)
         """
         if not sentences:
-            return []
+            return [], []
 
         # Run CheXbert on all sentences
         # Output shape: [14 conditions, num_sentences]
         outputs = self.model(sentences)
+
+        # Extract label vectors for each sentence
+        labels_vectors = []
+        for sent_idx in range(len(sentences)):
+            labels = []
+            for cond_idx in range(self.num_conditions):
+                labels.append(int(outputs[cond_idx][sent_idx]))
+            labels_vectors.append(labels)
 
         results = []
         for i, (sentence, expected_cat) in enumerate(zip(sentences, chexpert_categories)):
@@ -142,7 +165,7 @@ class CheXbertLabelVerifier:
                         0.0
                     ))
 
-        return results
+        return results, labels_vectors
 
     def verify_mapping(
         self,
@@ -150,7 +173,7 @@ class CheXbertLabelVerifier:
         chexpert_category: str,
         sentence_en: str,
         sentence_es: str = "",
-    ) -> Tuple[bool, str, float]:
+    ) -> Tuple[bool, str, float, List[int]]:
         """
         Verify if the PadChest→CheXpert mapping is correct using CheXbert.
 
@@ -161,15 +184,16 @@ class CheXbertLabelVerifier:
             sentence_es: Spanish sentence (fallback)
 
         Returns:
-            Tuple of (is_verified, reason, confidence_score)
+            Tuple of (is_verified, reason, confidence_score, labels_vector)
+            where labels_vector is a list of 14 integers (0=blank, 1=positive, 2=negative, 3=uncertain)
         """
         text = sentence_en or sentence_es or ""
 
         if not text.strip():
-            return False, "Empty sentence - cannot verify", 0.0
+            return False, "Empty sentence - cannot verify", 0.0, [0] * self.num_conditions
 
-        results = self.verify_batch([text], [chexpert_category])
-        return results[0]
+        results, labels_vectors = self.verify_batch([text], [chexpert_category])
+        return results[0][0], results[0][1], results[0][2], labels_vectors[0]
 
 
 class NegationDetector:
@@ -378,24 +402,21 @@ def extract_bboxes_with_labels(image_data: Dict, negation_detector: NegationDete
         sentence_en = finding.get('sentence_en', '')
         text_analysis = negation_detector.analyze_finding(sentence_en)
 
-        # Create bbox entry for each box in this finding
-        for box_idx, box in enumerate(boxes):
-            bbox_entry = {
-                'box': box,
-                'chexpert_categories': list(chexpert_cats),
-                'padchest_labels': finding_labels,
-                'sentence_en': sentence_en,
-                'sentence_es': finding.get('sentence_es', ''),
-                'locations': finding.get('locations', []),
-                'is_valid': text_analysis['is_valid'],
-                'is_negated': text_analysis['is_negated'],
-                'is_uncertain': text_analysis['is_uncertain'],
-                'is_minimal': text_analysis['is_minimal'],
-                'validation_reason': text_analysis['reason'],
-                'box_index': box_idx,
-                'total_boxes_in_finding': len(boxes)
-            }
-            bboxes.append(bbox_entry)
+        # Create single bbox entry with all boxes for this finding (keep together)
+        bbox_entry = {
+            'boxes': boxes,  # Keep all boxes together as a list
+            'chexpert_categories': list(chexpert_cats),
+            'padchest_labels': finding_labels,
+            'sentence_en': sentence_en,
+            'sentence_es': finding.get('sentence_es', ''),
+            'locations': finding.get('locations', []),
+            'is_valid': text_analysis['is_valid'],
+            'is_negated': text_analysis['is_negated'],
+            'is_uncertain': text_analysis['is_uncertain'],
+            'is_minimal': text_analysis['is_minimal'],
+            'validation_reason': text_analysis['reason'],
+        }
+        bboxes.append(bbox_entry)
 
     return bboxes
 
@@ -412,11 +433,21 @@ def organize_by_chexpert_label(
     """
     Organize dataset by CheXpert label with CheXbert verification.
 
-    Each sample contains:
-    - main_bbox: The bbox with the target CheXpert label (for evaluation)
-    - other_bboxes: Other bboxes in the same image (context)
-    - image_info: Image metadata
-    - verification: CheXbert verification results for the label mapping
+    Output format matches imagenome_annotations.json:
+    {
+        "image_id": {
+            "img_path": "...",
+            "report": "combined descriptions from all bboxes",
+            "labels": [...],
+            "regions": [
+                {
+                    "anatomy": "location",
+                    "bbox": [...],
+                    "findings": [...]
+                }
+            ]
+        }
+    }
 
     Only saves samples where CheXbert confirms the remapped label.
     Discarded samples are saved separately for analysis.
@@ -459,9 +490,9 @@ def organize_by_chexpert_label(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Storage for verified and discarded samples (by category)
-    verified_samples_by_category = defaultdict(list)
-    discarded_samples = []
+    # Storage for verified images (in imagenome format)
+    verified_images = {}  # Dict keyed by ImageID
+    verified_samples_by_category = defaultdict(list)  # For per-category files
 
     # Statistics
     stats = {
@@ -545,90 +576,54 @@ def organize_by_chexpert_label(
         for bbox in valid_bboxes:
             all_categories_in_image.update(bbox['chexpert_categories'])
 
-        # Create samples: one for each bbox as "main" bbox
-        image_info = {
-            'ImageID': image_data.get('ImageID', ''),
-            'StudyID': image_data.get('StudyID', ''),
-            'PreviousImageID': image_data.get('PreviousImageID'),
-            'PreviousStudyID': image_data.get('PreviousStudyID'),
-        }
+        # Image ID
+        image_id = image_data.get('ImageID', '')
 
-        for main_idx, main_bbox in enumerate(valid_bboxes):
-            # Create list of other bboxes in the image
-            other_bboxes = [
-                bbox for bbox_idx, bbox in enumerate(valid_bboxes)
-                if bbox_idx != main_idx
-            ]
+        # Track verified bboxes for this image
+        verified_bboxes_for_image = []
+        verified_sentences = []
 
-            # Create sample for each CheXpert category this bbox belongs to
-            for category in main_bbox['chexpert_categories']:
-                # Verify the label mapping using CheXbert
+        # Verify each bbox and collect verified ones
+        for bbox in valid_bboxes:
+            # Verify against each of its CheXpert categories
+            bbox_verified = False
+            verified_categories = []
+            labels_vector = [0] * 14
+
+            for category in bbox['chexpert_categories']:
                 if verify_mappings:
-                    is_verified, reason, confidence = label_verifier.verify_mapping(
-                        padchest_labels=main_bbox['padchest_labels'],
+                    is_verified, reason, confidence, cat_labels_vector = label_verifier.verify_mapping(
+                        padchest_labels=bbox['padchest_labels'],
                         chexpert_category=category,
-                        sentence_en=main_bbox['sentence_en'],
-                        sentence_es=main_bbox['sentence_es']
+                        sentence_en=bbox['sentence_en'],
+                        sentence_es=bbox['sentence_es']
                     )
                 else:
-                    is_verified, reason, confidence = True, "Verification disabled", 1.0
-
-                sample = {
-                    'image_info': image_info,
-                    'main_bbox': {
-                        'box': main_bbox['box'],
-                        'chexpert_category': category,
-                        'all_chexpert_categories': main_bbox['chexpert_categories'],
-                        'padchest_labels': main_bbox['padchest_labels'],
-                        'sentence_en': main_bbox['sentence_en'],
-                        'sentence_es': main_bbox['sentence_es'],
-                        'locations': main_bbox['locations'],
-                        'is_uncertain': main_bbox['is_uncertain'],
-                        'is_minimal': main_bbox['is_minimal'],
-                    },
-                    'other_bboxes': [
-                        {
-                            'box': ob['box'],
-                            'chexpert_categories': ob['chexpert_categories'],
-                            'padchest_labels': ob['padchest_labels'],
-                            'sentence_en': ob['sentence_en'],
-                            'locations': ob['locations'],
-                            'same_category': category in ob['chexpert_categories']
-                        }
-                        for ob in other_bboxes
-                    ],
-                    'total_bboxes_in_image': len(valid_bboxes),
-                    'other_categories_in_image': list(all_categories_in_image - {category}),
-                    'verification': {
-                        'is_verified': is_verified,
-                        'reason': reason,
-                        'confidence': confidence
-                    }
-                }
+                    is_verified, reason, confidence, cat_labels_vector = True, "Verification disabled", 1.0, [0] * 14
 
                 if is_verified:
-                    # Save to verified samples
-                    verified_samples_by_category[category].append(sample)
+                    bbox_verified = True
+                    verified_categories.append(category)
+                    labels_vector = cat_labels_vector
+
                     stats['samples_verified'] += 1
                     stats['verified_per_category'][category] += 1
-
-                    # Track co-occurrence
-                    for other_cat in all_categories_in_image:
-                        if other_cat != category:
-                            stats['co_occurrence'][category][other_cat] += 1
 
                     # Track verification examples
                     if len(stats['verification_reasons']['verified']) < 20:
                         stats['verification_reasons']['verified'].append({
                             'category': category,
-                            'padchest_labels': main_bbox['padchest_labels'],
-                            'sentence': main_bbox['sentence_en'][:200],
+                            'padchest_labels': bbox['padchest_labels'],
+                            'sentence': bbox['sentence_en'][:200],
                             'reason': reason,
                             'confidence': confidence
                         })
+
+                    # Track co-occurrence
+                    for other_cat in all_categories_in_image:
+                        if other_cat != category:
+                            stats['co_occurrence'][category][other_cat] += 1
                 else:
-                    # Discard sample
-                    discarded_samples.append(sample)
                     stats['samples_discarded'] += 1
                     stats['discarded_per_category'][category] += 1
 
@@ -636,17 +631,80 @@ def organize_by_chexpert_label(
                     if len(stats['verification_reasons']['discarded']) < 20:
                         stats['verification_reasons']['discarded'].append({
                             'category': category,
-                            'padchest_labels': main_bbox['padchest_labels'],
-                            'sentence': main_bbox['sentence_en'][:200],
+                            'padchest_labels': bbox['padchest_labels'],
+                            'sentence': bbox['sentence_en'][:200],
                             'reason': reason,
                             'confidence': confidence
                         })
+
+            # Add verified bbox to the list
+            if bbox_verified:
+                anatomy = bbox['locations'][0] if bbox['locations'] else "unspecified"
+                verified_bboxes_for_image.append({
+                    'anatomy': anatomy,
+                    'bbox': bbox['boxes'],
+                    'findings': bbox['padchest_labels'],
+                    'chexpert_categories': verified_categories,
+                    'sentence': bbox['sentence_en'],
+                    'labels': labels_vector,
+                })
+                if bbox['sentence_en']:
+                    verified_sentences.append(bbox['sentence_en'])
+
+        # Add to verified_images if we have verified bboxes
+        if verified_bboxes_for_image:
+            # Combine sentences into report (deduplicate while preserving order)
+            seen_sentences = set()
+            unique_sentences = []
+            for sent in verified_sentences:
+                if sent not in seen_sentences:
+                    seen_sentences.add(sent)
+                    unique_sentences.append(sent)
+            report = ' '.join(unique_sentences)
+
+            # Combine label vectors from all verified bboxes
+            combined_labels = [0] * 14
+            for bbox_info in verified_bboxes_for_image:
+                bbox_labels = bbox_info.get('labels', [0] * 14)
+                for i in range(14):
+                    # Prioritize: 1 (positive) > 3 (uncertain) > 2 (negative) > 0 (blank)
+                    if bbox_labels[i] == 1:
+                        combined_labels[i] = 1
+                    elif combined_labels[i] != 1 and bbox_labels[i] == 3:
+                        combined_labels[i] = 3
+                    elif combined_labels[i] not in [1, 3] and bbox_labels[i] == 2:
+                        combined_labels[i] = 2
+
+            image_entry = {
+                'img_path': image_id,
+                'report': report,
+                'labels': combined_labels,
+                'regions': verified_bboxes_for_image
+            }
+
+            verified_images[image_id] = image_entry
+
+            # Add to per-category lists (same structure, with regions filtered by category)
+            for category in all_categories_in_image:
+                category_regions = [
+                    r for r in verified_bboxes_for_image
+                    if category in r['chexpert_categories']
+                ]
+                if category_regions:
+                    verified_samples_by_category[category].append({
+                        'img_path': image_id,
+                        'report': report,
+                        'labels': combined_labels,
+                        'regions': category_regions
+                    })
 
         if (idx + 1) % 500 == 0:
             print(f"  Processed {idx + 1} images... (verified: {stats['samples_verified']}, discarded: {stats['samples_discarded']})")
 
     print(f"\nProcessing complete!")
     print(f"Images with valid bboxes: {stats['images_with_valid_bboxes']}")
+    print(f"Verified images (imagenome format): {len(verified_images)}")
+    print(f"Total regions: {sum(len(img['regions']) for img in verified_images.values())}")
     print(f"Total valid bboxes: {stats['bboxes_valid']}")
     print(f"Samples verified: {stats['samples_verified']}")
     print(f"Samples discarded: {stats['samples_discarded']}")
@@ -654,21 +712,12 @@ def organize_by_chexpert_label(
     # Save files (not directories)
     print(f"\nSaving files to: {output_path}")
 
-    # Save all verified samples (combined file)
-    all_verified_samples = []
-    for category in CHEXPERT_CATEGORIES:
-        all_verified_samples.extend(verified_samples_by_category[category])
-
+    # Save all verified samples in imagenome format (dict keyed by image_id)
     verified_all_file = output_path / "verified_samples.json"
     with open(verified_all_file, 'w') as f:
-        json.dump(all_verified_samples, f, indent=2)
-    print(f"  Saved {len(all_verified_samples)} verified samples to: verified_samples.json")
+        json.dump(verified_images, f, indent=2, ensure_ascii=False)
+    print(f"  Saved {len(verified_images)} verified images to: verified_samples.json (imagenome format)")
 
-    # Save discarded samples
-    discarded_file = output_path / "discarded_samples.json"
-    with open(discarded_file, 'w') as f:
-        json.dump(discarded_samples, f, indent=2)
-    print(f"  Saved {len(discarded_samples)} discarded samples to: discarded_samples.json")
 
     # Save per-category files
     print(f"\n  Per-category files:")
@@ -687,10 +736,10 @@ def organize_by_chexpert_label(
         # Calculate category statistics
         n_samples = len(samples)
         n_discarded = stats['discarded_per_category'][category]
-        unique_images = len(set(s['image_info']['ImageID'] for s in samples))
-        avg_confidence = sum(s['verification']['confidence'] for s in samples) / n_samples if n_samples else 0
+        unique_images = len(set(s['img_path'] for s in samples))
+        total_regions = sum(len(s['regions']) for s in samples)
 
-        print(f"    {category}: {n_samples} verified, {n_discarded} discarded ({unique_images} unique images, avg conf: {avg_confidence:.2f})")
+        print(f"    {category}: {n_samples} images, {total_regions} regions, {n_discarded} discarded")
 
     # Save overall summary
     overall_summary = {
@@ -700,11 +749,14 @@ def organize_by_chexpert_label(
             'include_minimal': include_minimal,
             'verify_mappings': verify_mappings,
             'verifier': 'CheXbert' if verify_mappings else None,
-            'source_file': json_path
+            'source_file': json_path,
+            'output_format': 'imagenome'
         },
         'statistics': {
             'total_images_in_source': stats['total_images'],
             'images_with_valid_bboxes': stats['images_with_valid_bboxes'],
+            'verified_images': len(verified_images),
+            'total_regions': sum(len(img['regions']) for img in verified_images.values()),
             'total_bboxes_extracted': stats['total_bboxes_extracted'],
             'bboxes_filtered_negated': stats['bboxes_filtered_negated'],
             'bboxes_filtered_uncertain': stats['bboxes_filtered_uncertain'],
@@ -759,9 +811,8 @@ def organize_by_chexpert_label(
     print(f"  {'TOTAL':<30} {stats['samples_verified']:>10} {stats['samples_discarded']:>10}")
 
     print(f"\nFiles saved to: {output_path}")
-    print(f"  - verified_samples.json (all verified samples)")
-    print(f"  - discarded_samples.json (samples not verified)")
-    print(f"  - {{Category}}_samples.json (per-category files)")
+    print(f"  - verified_samples.json ({len(verified_images)} images in imagenome format)")
+    print(f"  - {{Category}}_samples.json (per-category files, same format)")
     print(f"  - summary.json (statistics)")
 
     return overall_summary
@@ -786,8 +837,8 @@ def main():
     # - Only save samples where CheXbert confirms the remapped label
     summary = organize_by_chexpert_label(
         json_path,
-        filter_negated=True,
-        filter_uncertain=True,
+        filter_negated=False,
+        filter_uncertain=False,
         include_minimal=True,
         verify_mappings=True,
         device=None  # Auto-detect (cuda if available)

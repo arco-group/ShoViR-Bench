@@ -15,6 +15,7 @@ def load_processor(
         model_id,
         trust_remote_code=trust_remote_code,
         cache_dir=cache_dir,
+        use_fast=True,
     )
 
 
@@ -28,8 +29,20 @@ def load_model(
     class_name = model_class_name
     last_error: Exception | None = None
 
-    if class_name in ("MedGemma", "Maira2", "CheXagent", "CXRMateED"):
+    if class_name in ("MedGemma", "Maira2", "CXRMateED"):
 
+        from transformers import (
+            AutoModelForCausalLM,
+        )
+
+        return AutoModelForCausalLM.from_pretrained(
+            model_id,
+            trust_remote_code=trust_remote_code,
+            cache_dir=cache_dir,
+            torch_dtype=torch_dtype,
+            attn_implementation="sdpa",
+        )
+    elif class_name in ("CheXagent"):
         from transformers import (
             AutoModelForCausalLM,
         )
