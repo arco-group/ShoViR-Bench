@@ -1,6 +1,7 @@
 .venv_RRG/
 .venv_nv/
 .venv/
+.radialog_venv/
 __pycache__/
 *.pyc
 model_caching/
