@@ -12,6 +12,8 @@ from .nv_reason_cxr import MODEL_CLASS as NV_REASON_CLASS
 from .nv_reason_cxr import MODEL_SPEC as NV_REASON_SPEC
 from .radialog import MODEL_CLASS as RADIALOG_CLASS
 from .radialog import MODEL_SPEC as RADIALOG_SPEC
+from .llavarad import MODEL_CLASS as LLAVARAD_CLASS
+from .llavarad import MODEL_SPEC as LLAVARAD_SPEC
 from .spec import ModelSpec
 
 MODEL_SPECS: dict[str, ModelSpec] = {
@@ -22,6 +24,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
     CHEXAGENT_SPEC.key: CHEXAGENT_SPEC,
     NV_REASON_SPEC.key: NV_REASON_SPEC,
     RADIALOG_SPEC.key: RADIALOG_SPEC,
+    LLAVARAD_SPEC.key: LLAVARAD_SPEC,
 }
 
 MODEL_CLASSES = {
@@ -32,4 +35,5 @@ MODEL_CLASSES = {
     CHEXAGENT_SPEC.key: CHEXAGENT_CLASS,
     NV_REASON_SPEC.key: NV_REASON_CLASS,
     RADIALOG_SPEC.key: RADIALOG_CLASS,
+    LLAVARAD_SPEC.key: LLAVARAD_CLASS,
 }

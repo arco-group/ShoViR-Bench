@@ -29,7 +29,7 @@ MODEL_SPEC = ModelSpec(
     task="image-to-text",
     supports_images=True,
     generation_max_tokens = 450,
-    caching = False,
+    caching = True,
 )
 
 MODEL_CLASS = MedGemma

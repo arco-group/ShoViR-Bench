@@ -1,3 +1,4 @@
+
 PROMPTS = {
     "chexagent_default": (
         "You are an expert radiologist."
@@ -5,12 +6,22 @@ PROMPTS = {
     "maira2_default": (
         "You are an expert radiologist."
     ),
+    "libra_default": "Provide a detailed description of the findings in the radiology image.",
     "medgemma_default": (
         "You are an expert radiologist."
     ),
     "nv_reason_default": (
         "You are an expert radiologist."
     ),
-    "radiology_minimal": "You are an expert radiologist.",
-    "radialog_default": "",
+    "libra_default": (
+        "Provide a detailed description of the findings in the radiology image."
+    ),
+    "llavarad_default": (
+        "Provide a detailed description of the findings in the radiology image."
+    ),
+    "maira-2_default": (
+        "Provide a detailed description of the findings in the radiology image."
+    ),
+    "radialog_default": "Generate a complete radiology report for this image."
 }
+
