@@ -31,10 +31,15 @@ python src/main.py \
   --cache-dir ./model_caching
 ```
 
+Enviroments:
 
-RADIALOG - venv_nv
+.radialog_venv: RADIALOG 
 
-venv_RRG
+.venv_RRG: CXRMateED, MEDGEMMA, MAIRA-2
+
+.venv_nv: NV-reason-CXR
+
+.
 
 
 ## Notes
