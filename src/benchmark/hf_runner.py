@@ -145,8 +145,7 @@ def run_inference(
                 "image_paths": image_paths,
                 "predictions": predictions_list,
                 "references": references_list,
-                "labels": labels_list,
-                "num_images": len(images),
+                "labels": labels_list
             })
 
             processed += len(images)
@@ -156,11 +155,58 @@ def run_inference(
     return results
 
 
+import json
+from pathlib import Path
+from typing import Any, Iterable
+
+def flatten_results(results: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Convert a list of "batched" result dicts (where each field is a list per image)
+    into a flat list of dicts (one dict per image).
+    """
+    flat: list[dict[str, Any]] = []
+
+    for r in results:
+        # Per-image lists
+        image_paths = r.get("image_paths", [])
+        predictions = r.get("predictions", [])
+        references = r.get("references", [])
+        labels = r.get("labels", [])
+
+        # Any other metadata that should be copied to each per-image item
+        # (exclude the per-image list fields)
+        shared = {
+            k: v for k, v in r.items()
+            if k not in {"image_paths", "predictions", "references", "labels"}
+        }
+
+        # Use image_paths length as the canonical number of items
+        n = len(image_paths)
+
+        for i in range(n):
+            item = dict(shared)
+
+            # Store single values per image
+            item["image_path"] = image_paths[i]
+            item["prediction"] = predictions[i] if i < len(predictions) else None
+            item["reference"] = references[i] if i < len(references) else None
+            item["label"] = labels[i] if i < len(labels) else None
+
+            flat.append(item)
+
+    return flat
+
+
 def write_json(path: Path, results: Iterable[dict[str, Any]]) -> None:
-    """Write results as a JSON array."""
+    """Write results as a JSON array (flattened per image)."""
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Flatten batched results -> one dict per image
+    flat = flatten_results(results)
+
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(list(results), handle, ensure_ascii=False, indent=2)
+        json.dump(flat, handle, ensure_ascii=False, indent=2)
+
 
 
 def _extract_text(output: Any) -> str:
