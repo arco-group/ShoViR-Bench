@@ -71,7 +71,7 @@ class BaseHFLM(abc.ABC):
         image: Image.Image | list[Image.Image],
         prompt_text: str,
         *,
-        user_text: str = "Analyze this image.",
+        user_text: str = "",
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
         """Run inference on one image or a batch of independent conversations.

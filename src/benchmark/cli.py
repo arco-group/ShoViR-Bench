@@ -125,7 +125,7 @@ def main() -> int:
         data_dir=Path(args.data),
         experiment=args.experiment,
         output_path=output_path,
-        data_json=Path(args.data_json) if args.data_json else None,
+#        data_json=Path(args.data_json) if args.data_json else None,
         cache_dir=Path(args.cache_dir),
         prompt_key=args.prompt_key,
         max_images=args.max_images,
