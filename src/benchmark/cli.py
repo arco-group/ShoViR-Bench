@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 from .config import BenchmarkConfig
-from .hf_runner import run_inference, run_inference_streaming, write_jsonl
+from .hf_runner import run_inference, write_json
 from .io import iter_images, list_images
 from .models import MODEL_SPECS
 from .preprocess import PREPROCESS, _resolve_preprocess
@@ -119,7 +119,7 @@ def main() -> int:
         data_dir=Path(args.data),
         experiment=args.experiment,
         output_path=output_path,
-        data_json=Path(args.data_json) if args.data_json else None,
+#        data_json=Path(args.data_json) if args.data_json else None,
         cache_dir=Path(args.cache_dir),
         prompt_key=args.prompt_key,
         max_images=args.max_images,

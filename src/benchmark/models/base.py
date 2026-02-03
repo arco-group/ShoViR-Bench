@@ -169,7 +169,7 @@ class BaseHFLM(abc.ABC):
             )
         if self._model is None:
             self._model = load_model(
-                #self.__class__.__name__,
+                self.__class__.__name__,
                 self.model_id,
                 trust_remote_code=self.trust_remote_code,
                 cache_dir=self.cache_dir,

@@ -12,7 +12,7 @@ class BenchmarkConfig:
     data_dir: Path
     experiment: str
     output_path: Path
-    data_json: Optional[Path] = None
+#    data_json: Optional[Path] = None
     cache_dir: Path = Path("./model_caching")
     prompt_key: Optional[str] = None
     max_images: Optional[int] = None
