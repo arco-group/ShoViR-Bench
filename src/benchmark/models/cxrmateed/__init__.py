@@ -68,7 +68,7 @@ class CXRMateED(BaseHFLM):
 MODEL_SPEC = ModelSpec(
     key="cxrmateed",
     model_id="aehrc/cxrmate-rrg24",
-    prompt_key="medgemma_default",
+    prompt_key="cxrmateed_default",
     task="image-to-text",
     supports_images=True,
     caching = True,
