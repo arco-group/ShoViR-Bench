@@ -9,13 +9,13 @@ from ..base import BaseHFLM
 from ..spec import ModelSpec
 import sys
 sys.path.insert(0, "RaDialog-interactive-radiology-report-generation")
-sys.path.insert(0, "RaDialog-interactive-radiology-report-generation/findings_classifier")
-from chexpert_train import LitIGClassifier, ExpandChannels
 from torchvision.transforms import Compose, Resize, ToTensor, CenterCrop, transforms
 
 class RaDialog(BaseHFLM):
+
     @staticmethod
     def init_chexpert_predictor():
+        from chexpert_train import LitIGClassifier, ExpandChannels
         ckpt_path = f"RaDialog-interactive-radiology-report-generation/findings_classifier/checkpoints/chexpert_train/ChexpertClassifier.ckpt"
         chexpert_cols = ["No Finding", "Enlarged Cardiomediastinum",
                         "Cardiomegaly", "Lung Opacity",
