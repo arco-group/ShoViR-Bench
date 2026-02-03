@@ -7,7 +7,10 @@ import torch
 class CXRMateED(BaseHFLM):
 
     def _ensure_loaded(self):
-        tokenizer = transformers.AutoTokenizer.from_pretrained(self.model_id)
+        if self._model is not None:
+            return self._model, self._processor, self._tokenizer
+
+        tokenizer = transformers.AutoTokenizer.from_pretrained(self.model_id, cache_dir=self.cache_dir)
         model = transformers.AutoModel.from_pretrained(self.model_id, trust_remote_code=self.trust_remote_code, cache_dir=self.cache_dir).to(device=self.device)
         from torchvision.transforms import v2
         test_transforms = v2.Compose(
@@ -21,6 +24,9 @@ class CXRMateED(BaseHFLM):
         ]
         )
 
+        self._model = model
+        self._processor = test_transforms
+        self._tokenizer = tokenizer
         return model, test_transforms, tokenizer
 
 
@@ -56,6 +62,7 @@ MODEL_SPEC = ModelSpec(
     prompt_key="medgemma_default",
     task="image-to-text",
     supports_images=True,
+    caching = True,
 
 )
 

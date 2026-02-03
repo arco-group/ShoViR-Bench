@@ -22,6 +22,7 @@ def _build_model_instance(config: BenchmarkConfig):
         dtype=config.dtype,
         model_id=spec.model_id,
         task=spec.task,
+        caching=spec.caching,
         trust_remote_code=config.trust_remote_code,
         cache_dir=str(config.cache_dir),
     )

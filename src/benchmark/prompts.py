@@ -22,6 +22,6 @@ PROMPTS = {
     "maira-2_default": (
         "Provide a detailed description of the findings in the radiology image."
     ),
-    "radiology_minimal": "Generate a complete radiology report for this image."
+    "radialog_default": "Generate a complete radiology report for this image."
 }
 

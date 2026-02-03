@@ -74,24 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dtype", default=None)
     parser.add_argument("--trust-remote-code", action="store_true")
 
-    # Parallel inference options
-    parser.add_argument(
-        "--parallel",
-        action="store_true",
-        help="Enable parallel image loading (recommended for large datasets)",
-    )
-    parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=8,
-        help="Number of parallel image loading workers (default: 4)",
-    )
-    parser.add_argument(
-        "--prefetch",
-        type=int,
-        default=8,
-        help="Number of images to prefetch ahead (default: 8)",
-    )
+
     parser.add_argument(
         "--no-progress",
         action="store_true",

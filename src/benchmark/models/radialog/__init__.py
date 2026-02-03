@@ -58,14 +58,14 @@ class RaDialog(BaseHFLM):
         # Return model and tokenizer (processor equivalent)
         return self._model, self._tokenizer
 
-    def __call__(
+    def _single_image_call(
         self,
         image: Image.Image,
         prompt_text: str,
         *,
         user_text: str = "Analyze this image.",
         drop_config: dict[str, object] | None = None,
-    ) -> list[dict[str, str]]:
+    ) -> dict[str, str]:
         from LLAVA_Biovil.llava.mm_utils import tokenizer_image_token, KeywordsStoppingCriteria
         from LLAVA_Biovil.llava.conversation import SeparatorStyle, conv_vicuna_v1
         from LLAVA_Biovil.llava.constants import IMAGE_TOKEN_INDEX
@@ -128,13 +128,29 @@ class RaDialog(BaseHFLM):
             output_ids[0, input_ids.shape[1]:]
         ).strip().replace("</s>", "")
 
-        return [{"generated_text": generated_text}]
+        return {"generated_text": generated_text}
+
+    def __call__(
+        self,
+        image,
+        prompt_text: str,
+        *,
+        user_text: str = "Analyze this image.",
+        drop_config: dict[str, object] | None = None,
+    ) -> list[dict[str, str]]:
+        if isinstance(image, list):
+            return [
+                self._single_image_call(
+                    img, prompt_text, user_text=user_text, drop_config=drop_config,
+                )
+                for img in image
+            ]
+        return [self._single_image_call(
+            image, prompt_text, user_text=user_text, drop_config=drop_config,
+        )]
 
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         """Preprocess image: remap to uint8 and convert to grayscale."""
-        if self.image_preprocess is not None:
-            return self.image_preprocess(image)
-
         # Default preprocessing for RaDialog
         arr = self._remap_to_uint8(np.array(image))
         image = Image.fromarray(arr).convert("L")
