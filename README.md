@@ -39,7 +39,9 @@ Enviroments:
 
 .venv_nv: NV-reason-CXR
 
-.
+.SC_Libra_venv: Libra, Llava-Rad
+
+.venv_chexagent: CheXagent
 
 
 ## Notes
