@@ -9,10 +9,27 @@ from ..base import BaseHFLM
 from ..spec import ModelSpec
 import sys
 sys.path.insert(0, "RaDialog-interactive-radiology-report-generation")
-
+sys.path.insert(0, "RaDialog-interactive-radiology-report-generation/findings_classifier")
+from chexpert_train import LitIGClassifier
 
 class RaDialog(BaseHFLM):
+    @staticmethod
+    def init_chexpert_predictor():
+        ckpt_path = f"RaDialog-interactive-radiology-report-generation/findings_classifier/checkpoints/chexpert_train/ChexpertClassifier.ckpt"
+        chexpert_cols = ["No Finding", "Enlarged Cardiomediastinum",
+                        "Cardiomegaly", "Lung Opacity",
+                        "Lung Lesion", "Edema",
+                        "Consolidation", "Pneumonia",
+                        "Atelectasis", "Pneumothorax",
+                        "Pleural Effusion", "Pleural Other",
+                        "Fracture", "Support Devices"]
+        model = LitIGClassifier.load_from_checkpoint(ckpt_path, num_classes=14, class_names=chexpert_cols, strict=False)
+        model.eval()
+        model.cuda()
+        model.half()
+        cp_transforms = Compose([Resize(512), CenterCrop(488), ToTensor(), ExpandChannels()])
 
+        return model, np.asarray(model.class_names), cp_transforms
     def _ensure_loaded(self):
         if self._model is not None:
             return self._model, self._processor
@@ -20,7 +37,7 @@ class RaDialog(BaseHFLM):
         # Import RaDialog dependencies
         from LLAVA_Biovil.llava.model.builder import load_pretrained_model
         from LLAVA_Biovil.llava.mm_utils import remap_to_uint8
-        from utils import create_chest_xray_transform_for_inference, init_chexpert_predictor
+        from utils import create_chest_xray_transform_for_inference
 
         # Download model files
         model_path = snapshot_download(
@@ -44,7 +61,7 @@ class RaDialog(BaseHFLM):
         model.config.tokenizer_padding_side = "left"
 
         # Initialize CheXpert predictor for findings
-        cp_model, cp_class_names, cp_transforms = init_chexpert_predictor()
+        cp_model, cp_class_names, cp_transforms = self.init_chexpert_predictor()
 
         # Store components
         self._model = model
