@@ -24,6 +24,7 @@ def _build_model_instance(config: BenchmarkConfig):
         task=spec.task,
         caching=spec.caching,
         trust_remote_code=config.trust_remote_code,
+        generation_max_tokens=spec.generation_max_tokens,
         cache_dir=str(config.cache_dir),
     )
 
@@ -155,42 +156,61 @@ def run_inference(
     return results
 
 
-import json
-from pathlib import Path
 from typing import Any, Iterable
+
+def _broadcast_get(value: Any, i: int, n: int) -> Any:
+    """
+    Return the i-th element of a per-image field, handling common edge cases:
+    - If value is a list of length n: return value[i]
+    - If value is a list of length 1: broadcast (repeat) value[0] for all i
+    - If value is a scalar (e.g., a single string): broadcast it for all i
+    - Otherwise: return None
+    """
+    if value is None:
+        return None
+
+    # If it's already a list/tuple (per-image), index or broadcast
+    if isinstance(value, (list, tuple)):
+        if len(value) == n:
+            return value[i]
+        if len(value) == 1:
+            return value[0]
+        # If lengths don't match and it's not a single-item list, fail gracefully
+        return None
+
+    # If it's a scalar (e.g., a single prediction string), broadcast it
+    return value
+
 
 def flatten_results(results: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Convert a list of "batched" result dicts (where each field is a list per image)
-    into a flat list of dicts (one dict per image).
+    Convert a list of "batched" result dicts (where each field may be a list per image)
+    into a flat list of dicts (one dict per image), with broadcasting when needed.
     """
     flat: list[dict[str, Any]] = []
 
     for r in results:
-        # Per-image lists
         image_paths = r.get("image_paths", [])
-        predictions = r.get("predictions", [])
-        references = r.get("references", [])
-        labels = r.get("labels", [])
+        n = len(image_paths)
 
-        # Any other metadata that should be copied to each per-image item
-        # (exclude the per-image list fields)
+        # Copy any extra metadata into every per-image item
         shared = {
             k: v for k, v in r.items()
             if k not in {"image_paths", "predictions", "references", "labels"}
         }
 
-        # Use image_paths length as the canonical number of items
-        n = len(image_paths)
+        preds = r.get("predictions", None)
+        refs = r.get("references", None)
+        labs = r.get("labels", None)
 
         for i in range(n):
             item = dict(shared)
 
-            # Store single values per image
+            # Store one item per image
             item["image_path"] = image_paths[i]
-            item["prediction"] = predictions[i] if i < len(predictions) else None
-            item["reference"] = references[i] if i < len(references) else None
-            item["label"] = labels[i] if i < len(labels) else None
+            item["prediction"] = _broadcast_get(preds, i, n)
+            item["reference"] = _broadcast_get(refs, i, n)
+            item["label"] = _broadcast_get(labs, i, n)
 
             flat.append(item)
 
