@@ -39,7 +39,6 @@ datasets==4.5.0
 deap==1.4.3
 decorator==5.2.1
 dill==0.4.0
-distlib==0.3.7
 distro==1.9.0
 docopt==0.6.2
 docutils==0.22.4
@@ -91,7 +90,8 @@ jsonschema-specifications==2025.9.1
 keyring==25.7.0
 keyrings.alt==5.0.2
 latex2mathml==3.78.1
--e git+https://github.com/X-iZhang/Libra.git@0d6c56a44b0f74259bdd8f05929465790b49f6e5#egg=libra&subdirectory=../../Libra
+libra==1.0.3
+lightning-utilities==0.15.2
 lockfile==0.12.2
 markdown-it-py==4.0.0
 markdown2==2.5.4
@@ -132,8 +132,8 @@ pbr==7.0.3
 peft==0.4.0
 pexpect==4.9.0
 pillow==12.1.0
+pip==25.3
 pkginfo==1.12.1.2
-platformdirs==3.11.0
 pluggy==1.6.0
 ply==3.11
 pooch==1.8.2
@@ -164,6 +164,7 @@ python-dateutil==2.9.0.post0
 python-multipart==0.0.21
 pythran==0.9.5
 pytoml==0.1.21
+pytorch-lightning==2.6.1
 pytz==2025.2
 PyYAML==6.0.3
 RapidFuzz==3.14.3
@@ -183,7 +184,8 @@ scipy==1.11.1
 SecretStorage==3.5.0
 semantic-version==2.10.0
 sentencepiece==0.1.99
-setuptools-scm 
+setuptools==80.9.0
+setuptools-scm==8.0.4
 shellingham==1.5.4
 shortuuid==1.0.13
 simplegeneric==0.8.1
@@ -208,26 +210,27 @@ threadpoolctl==3.6.0
 timm==1.0.15
 tokenizers==0.21.1
 toml==0.10.2
-tomli
+tomli==2.0.1
 tomli_w==1.2.0
 tomlkit==0.13.3
 torch==2.4.0
+torchmetrics==1.8.2
 torchvision==0.19.0
 tqdm==4.67.1
 transformers==4.51.3
 triton==3.0.0
 typer==0.21.1
-typing-inspection==0.4.2
 typing_extensions==4.15.0
+typing-inspection==0.4.2
 tzdata==2025.3
 ujson==5.11.0
 urllib3==2.6.3
 uvicorn==0.40.0
 versioneer==0.29
-virtualenv 
 wavedrom==2.0.3.post3
 wcwidth==0.4.0
 webencodings==0.5.1
+wheel==0.45.1
 xlrd==2.0.2
 xxhash==3.6.0
 yarl==1.22.0
