@@ -1,19 +1,20 @@
 #!/bin/bash
-#SBATCH -A naiss2023-6-336
+#SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 12:00:00
+#SBATCH -t 02:00:00
 #SBATCH --gpus-per-node=A40:1
-#SBATCH -J chexone_baseline
-#SBATCH -o logs/baseline/chexone_%j.out
-#SBATCH -e logs/baseline/chexone_%j.err
+#SBATCH -J maira2_baseline
+#SBATCH -o logs/baseline/maira2_%j.out
+#SBATCH -e logs/baseline/maira2_%j.err
 
-# CheXOne Baseline Experiment
-# Model: StanfordAIMI/CheXOne
-# Virtual Environment: .venv_nv (Reasoning Model Backbones - Qwen2.5VL)
+# MAIRA-2 Baseline Experiment
+# Model: microsoft/maira-2 (radiology-specific)
+# GPU Memory: ~16GB in float16
+# Virtual Environment: .venv_RRG
 
 set -euo pipefail
 
-echo "=== CheXOne Baseline ==="
+echo "=== MAIRA-2 Baseline ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURMD_NODENAME"
 echo "Start time: $(date)"
@@ -23,7 +24,7 @@ echo ""
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate virtual environment
-source .venv_nv/bin/activate
+source .venv_RRG/bin/activate
 
 # Set environment
 export HF_HOME="${PWD}/.models_cache"
@@ -40,12 +41,12 @@ DATA_JSON="data/padchest-gr/chexpert-by-label/verified_samples.json"
 
 echo "Data directory: ${DATA_DIR}"
 echo "Data JSON: ${DATA_JSON}"
-echo "Virtual environment: .venv_nv"
+echo "Virtual environment: .venv_RRG"
 echo ""
 
 # Run inference
 python -m src.benchmark.cli \
-    --model chexone \
+    --model maira-2 \
     --data-json "${DATA_JSON}" \
     --data "${DATA_DIR}" \
     --experiment baseline \
@@ -54,7 +55,7 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 8
+    --num-images 6
 
 echo ""
 echo "=== Job Complete ==="

@@ -638,7 +638,8 @@
                 "--device", "cuda:0",
                 "--trust-remote-code",
                 "--dtype", "bfloat16",
-                "--num-images", "32"
+                "--num-images", "32",
+                "--max-images", "64"
             ],
             "justMyCode": true,
             "env": {

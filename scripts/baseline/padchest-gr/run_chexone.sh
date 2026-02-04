@@ -1,19 +1,19 @@
 #!/bin/bash
-#SBATCH -A naiss2023-6-336
+#SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 12:00:00
+#SBATCH -t 5:30:00
 #SBATCH --gpus-per-node=A40:1
-#SBATCH -J libra_baseline
-#SBATCH -o logs/baseline/libra_%j.out
-#SBATCH -e logs/baseline/libra_%j.err
+#SBATCH -J chexone_baseline
+#SBATCH -o logs/baseline/chexone_%j.out
+#SBATCH -e logs/baseline/chexone_%j.err
 
-# Libra Baseline Experiment
-# Model: X-iZhang/libra-v1.0-7b (7B parameters)
-# Virtual Environment: .SC_Libra_venv
+# CheXOne Baseline Experiment
+# Model: StanfordAIMI/CheXOne
+# Virtual Environment: .venv_nv (Reasoning Model Backbones - Qwen2.5VL)
 
 set -euo pipefail
 
-echo "=== Libra Baseline ==="
+echo "=== CheXOne Baseline ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURMD_NODENAME"
 echo "Start time: $(date)"
@@ -23,7 +23,7 @@ echo ""
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate virtual environment
-source .SC_Libra_venv/bin/activate
+source .venv_nv/bin/activate
 
 # Set environment
 export HF_HOME="${PWD}/.models_cache"
@@ -40,12 +40,12 @@ DATA_JSON="data/padchest-gr/chexpert-by-label/verified_samples.json"
 
 echo "Data directory: ${DATA_DIR}"
 echo "Data JSON: ${DATA_JSON}"
-echo "Virtual environment: .SC_Libra_venv"
+echo "Virtual environment: .venv_nv"
 echo ""
 
 # Run inference
 python -m src.benchmark.cli \
-    --model libra \
+    --model chexone \
     --data-json "${DATA_JSON}" \
     --data "${DATA_DIR}" \
     --experiment baseline \
@@ -53,7 +53,8 @@ python -m src.benchmark.cli \
     --cache-dir .models_cache \
     --device cuda:0 \
     --dtype bfloat16 \
-    --num-images 24
+    --trust-remote-code \
+    --num-images 8
 
 echo ""
 echo "=== Job Complete ==="

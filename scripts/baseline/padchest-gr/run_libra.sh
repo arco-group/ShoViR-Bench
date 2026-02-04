@@ -1,19 +1,19 @@
 #!/bin/bash
-#SBATCH -A naiss2023-6-336
+#SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 12:00:00
+#SBATCH -t 01:30:00
 #SBATCH --gpus-per-node=A40:1
-#SBATCH -J radialog_baseline
-#SBATCH -o logs/baseline/radialog_%j.out
-#SBATCH -e logs/baseline/radialog_%j.err
+#SBATCH -J libra_baseline
+#SBATCH -o logs/baseline/libra_%j.out
+#SBATCH -e logs/baseline/libra_%j.err
 
-# RaDialog Baseline Experiment
-# Model: RaDialog (radiology dialogue model)
-# Virtual Environment: .radialog_venv
+# Libra Baseline Experiment
+# Model: X-iZhang/libra-v1.0-7b (7B parameters)
+# Virtual Environment: .SC_Libra_venv
 
 set -euo pipefail
 
-echo "=== RaDialog Baseline ==="
+echo "=== Libra Baseline ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURMD_NODENAME"
 echo "Start time: $(date)"
@@ -23,7 +23,7 @@ echo ""
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate virtual environment
-source .radialog_venv/bin/activate
+source .SC_Libra_venv/bin/activate
 
 # Set environment
 export HF_HOME="${PWD}/.models_cache"
@@ -40,12 +40,12 @@ DATA_JSON="data/padchest-gr/chexpert-by-label/verified_samples.json"
 
 echo "Data directory: ${DATA_DIR}"
 echo "Data JSON: ${DATA_JSON}"
-echo "Virtual environment: .radialog_venv"
+echo "Virtual environment: .SC_Libra_venv"
 echo ""
 
 # Run inference
 python -m src.benchmark.cli \
-    --model radialog \
+    --model libra \
     --data-json "${DATA_JSON}" \
     --data "${DATA_DIR}" \
     --experiment baseline \
@@ -53,8 +53,7 @@ python -m src.benchmark.cli \
     --cache-dir .models_cache \
     --device cuda:0 \
     --dtype bfloat16 \
-    --trust-remote-code \
-    --num-images 32
+    --num-images 24
 
 echo ""
 echo "=== Job Complete ==="

@@ -1,20 +1,19 @@
 #!/bin/bash
-#SBATCH -A naiss2023-6-336
+#SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 08:00:00
+#SBATCH -t 01:30:00
 #SBATCH --gpus-per-node=A40:1
-#SBATCH -J medgemma_baseline
-#SBATCH -o logs/baseline/medgemma_%j.out
-#SBATCH -e logs/baseline/medgemma_%j.err
+#SBATCH -J llavarad_baseline
+#SBATCH -o logs/baseline/llavarad_%j.out
+#SBATCH -e logs/baseline/llavarad_%j.err
 
-# MedGemma Baseline Experiment
-# Model: google/medgemma-1.5-4b-it (4B parameters)
-# GPU Memory: ~10GB in float16
-# Virtual Environment: .venv_RRG
+# LLaVA-Rad Baseline Experiment
+# Model: LLaVA-Rad (radiology VLM)
+# Virtual Environment: .SC_Libra_venv
 
 set -euo pipefail
 
-echo "=== MedGemma Baseline ==="
+echo "=== LLaVA-Rad Baseline ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURMD_NODENAME"
 echo "Start time: $(date)"
@@ -24,7 +23,7 @@ echo ""
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate virtual environment
-source .venv_RRG/bin/activate
+source .SC_Libra_venv/bin/activate
 
 # Set environment
 export HF_HOME="${PWD}/.models_cache"
@@ -41,12 +40,12 @@ DATA_JSON="data/padchest-gr/chexpert-by-label/verified_samples.json"
 
 echo "Data directory: ${DATA_DIR}"
 echo "Data JSON: ${DATA_JSON}"
-echo "Virtual environment: .venv_RRG"
+echo "Virtual environment: .SC_Libra_venv"
 echo ""
 
 # Run inference
 python -m src.benchmark.cli \
-    --model medgemma \
+    --model llavarad \
     --data-json "${DATA_JSON}" \
     --data "${DATA_DIR}" \
     --experiment baseline \
@@ -55,11 +54,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 100
+    --num-images 24
 
 echo ""
 echo "=== Job Complete ==="
 echo "End time: $(date)"
-
-
-
