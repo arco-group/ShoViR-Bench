@@ -1,20 +1,19 @@
 #!/bin/bash
-#SBATCH -A naiss2023-6-336
+#SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 12:00:00
+#SBATCH -t 01:20:00
 #SBATCH --gpus-per-node=A40:1
-#SBATCH -J cxrmateed_baseline
-#SBATCH -o logs/baseline/cxrmateed_%j.out
-#SBATCH -e logs/baseline/cxrmateed_%j.err
+#SBATCH -J radialog_baseline
+#SBATCH -o logs/baseline/radialog_%j.out
+#SBATCH -e logs/baseline/radialog_%j.err
 
-# CXRMateED Baseline Experiment
-# Model: aehrc/cxrmate-single-tf (smaller, encoder-decoder)
-# GPU Memory: ~8GB
-# Virtual Environment: .venv_RRG
+# RaDialog Baseline Experiment
+# Model: RaDialog (radiology dialogue model)
+# Virtual Environment: .radialog_venv
 
 set -euo pipefail
 
-echo "=== CXRMateED Baseline ==="
+echo "=== RaDialog Baseline ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURMD_NODENAME"
 echo "Start time: $(date)"
@@ -24,7 +23,7 @@ echo ""
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate virtual environment
-source .venv_RRG/bin/activate
+source .radialog_venv/bin/activate
 
 # Set environment
 export HF_HOME="${PWD}/.models_cache"
@@ -41,12 +40,12 @@ DATA_JSON="data/padchest-gr/chexpert-by-label/verified_samples.json"
 
 echo "Data directory: ${DATA_DIR}"
 echo "Data JSON: ${DATA_JSON}"
-echo "Virtual environment: .venv_RRG"
+echo "Virtual environment: .radialog_venv"
 echo ""
 
 # Run inference
 python -m src.benchmark.cli \
-    --model cxrmateed \
+    --model radialog \
     --data-json "${DATA_JSON}" \
     --data "${DATA_DIR}" \
     --experiment baseline \
@@ -55,7 +54,7 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 256
+    --num-images 32
 
 echo ""
 echo "=== Job Complete ==="

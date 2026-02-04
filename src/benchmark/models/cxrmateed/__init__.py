@@ -63,7 +63,7 @@ class CXRMateED(BaseHFLM):
 
         for i, j in zip(findings, impression):
             print(f'Findings: {i}\nImpression: {j}\n')
-        return [{"findings": findings[0], "impression": impression[0]}]
+        return findings
     
 MODEL_SPEC = ModelSpec(
     key="cxrmateed",

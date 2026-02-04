@@ -590,7 +590,8 @@
                 "--device", "cuda:0",
                 "--dtype", "bfloat16",
                 "--trust-remote-code",
-                "--num-images", "256"
+                "--num-images", "2",
+                "--max-images", "4"
             ],
             "env": {
                 "HF_TOKEN": "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"
@@ -637,7 +638,8 @@
                 "--device", "cuda:0",
                 "--trust-remote-code",
                 "--dtype", "bfloat16",
-                "--num-images", "32"
+                "--num-images", "32",
+                "--max-images", "64"
             ],
             "justMyCode": true,
             "env": {
