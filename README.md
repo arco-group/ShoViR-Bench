@@ -31,10 +31,17 @@ python src/main.py \
   --cache-dir ./model_caching
 ```
 
+Enviroments:
 
-RADIALOG - venv_nv
+.radialog_venv: RADIALOG 
 
-venv_RRG
+.venv_RRG: CXRMateED, MEDGEMMA, MAIRA-2
+
+.venv_nv: NV-reason-CXR, CheXOne (Reasoning Model Backbones - Qwen2.5VL)
+
+.SC_Libra_venv: Libra, Llava-Rad
+
+.venv_chexagent: CheXagent
 
 
 ## Notes

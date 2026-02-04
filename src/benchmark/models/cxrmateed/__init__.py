@@ -40,16 +40,25 @@ class CXRMateED(BaseHFLM):
     ) -> list[dict[str, str]]:
         model, test_transforms, tokenizer = self._ensure_loaded()
         self.preprocess_image = test_transforms
-        # Shape: (C, H, W) -> (B, S, C, H, W) where B=1 (batch), S=1 (single image per study)
-        images = self.preprocess_image(image).unsqueeze(0).unsqueeze(0)
+
+        # Handle both single image and list of images
+        if not isinstance(image, list):
+            image = [image]
+
+        # Process each image: (C, H, W) for each image
+        processed_images = [self.preprocess_image(img) for img in image]
+
+        # Stack into (S, C, H, W) where B=1 (batch), S=len(image) (images per study)
+        images_tensor = torch.stack(processed_images).unsqueeze(1)  # (B, C, H, W) -> (B, 1, C, H, W) S=1 always in this setting
+
         with torch.no_grad():
-            
+
             output_ids = model.generate(
-                pixel_values=images.to(device=self.device),
-                max_length=512,
+                pixel_values=images_tensor.to(device=self.device),
+                max_length=self.generation_max_tokens,
                 num_beams=1,
                 bad_words_ids=[[tokenizer.convert_tokens_to_ids('[NF]')], [tokenizer.convert_tokens_to_ids('[NI]')]],
-            )   
+            )
         findings, impression = model.split_and_decode_sections(output_ids, tokenizer)
 
         for i, j in zip(findings, impression):
