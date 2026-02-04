@@ -24,6 +24,7 @@ def _build_model_instance(config: BenchmarkConfig):
         task=spec.task,
         caching=spec.caching,
         trust_remote_code=config.trust_remote_code,
+        generation_max_tokens=spec.generation_max_tokens,
         cache_dir=str(config.cache_dir),
     )
 

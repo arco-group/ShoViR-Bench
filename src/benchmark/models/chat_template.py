@@ -42,6 +42,16 @@ def load_model(
             torch_dtype=torch_dtype,
             attn_implementation="sdpa",
         )
+    elif class_name in ("ChexOne",):
+        from transformers import Qwen2_5_VLForConditionalGeneration
+
+        return Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            model_id,
+            trust_remote_code=trust_remote_code,
+            cache_dir=cache_dir,
+            torch_dtype=torch_dtype if torch_dtype is not None else "auto",
+            device_map="auto",
+        )
     elif class_name in ("CheXagent"):
         from transformers import (
             AutoModelForCausalLM,
