@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+PROJECT_DIR="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
 
 cd "$PROJECT_DIR"
 
@@ -51,7 +51,7 @@ echo "Submitting jobs..."
 JOB_IDS=()
 
 for model in "${MODELS[@]}"; do
-    script="scripts/baseline/run_${model}.sh"
+    script="scripts/baseline/padchest-gr/run_${model}.sh"
 
     if [[ ! -f "$script" ]]; then
         echo "  [SKIP] $model - script not found: $script"

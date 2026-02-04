@@ -101,11 +101,37 @@ def _safe_path_segment(value: str) -> str:
     return value.replace("/", "__").replace("\\", "__").replace(" ", "_")
 
 
-def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str) -> Path:
+def _extract_dataset_name(data_path: str) -> str:
+    """
+    Extract dataset name from data path.
+
+    Examples:
+        'data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images' -> 'padchest-gr'
+        'data/mimic-cxr/images' -> 'mimic-cxr'
+        '/absolute/path/data/dataset-name/...' -> 'dataset-name'
+    """
+    path = Path(data_path)
+    parts = path.parts
+
+    # Find 'data' in the path and get the next part
+    try:
+        data_idx = next(i for i, p in enumerate(parts) if p == 'data')
+        if data_idx + 1 < len(parts):
+            return parts[data_idx + 1]
+    except StopIteration:
+        pass
+
+    # Fallback: use the parent directory name
+    if path.is_dir():
+        return path.parent.name
+    return path.parent.parent.name
+
+
+def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str, dataset: str) -> Path:
     model_id_seg = _safe_path_segment(model_id)
     prompt_key_seg = _safe_path_segment(prompt_key)
     filename = f"{model_id_seg}_{prompt_key_seg}.json"
-    return Path(output_dir) / experiment / filename
+    return Path(output_dir) / experiment / dataset / filename
 
 
 
@@ -114,10 +140,14 @@ def main() -> int:
     args = parser.parse_args()
     spec = MODEL_SPECS[args.model]
     prompt_key = args.prompt_key or spec.prompt_key
+
+    # Extract dataset name from data path
+    dataset_name = _extract_dataset_name(args.data)
+
     output_path = (
         Path(args.output)
         if args.output is not None
-        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key)
+        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name)
     )
 
     config = BenchmarkConfig(

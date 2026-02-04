@@ -9,6 +9,7 @@ from ..base import BaseHFLM
 from ..spec import ModelSpec
 import sys
 sys.path.insert(0, "RaDialog-interactive-radiology-report-generation")
+sys.path.insert(0, "RaDialog-interactive-radiology-report-generation/findings_classifier")
 
 
 class RaDialog(BaseHFLM):

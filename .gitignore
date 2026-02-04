@@ -17,3 +17,4 @@ rrg_experiment.bash
 nv_experiment.bash
 job_*
 out_*
+/logs
