@@ -15,5 +15,6 @@ RaDialog-interactive-radiology-report-generation
 scripts/baseline
 libra_experiment.bash
 rrg_experiment.bash
+nv_experiment.bash
 job_*
 out_*
