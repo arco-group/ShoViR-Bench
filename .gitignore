@@ -14,5 +14,6 @@ SC_Libra_venv/
 RaDialog-interactive-radiology-report-generation
 libra_experiment.bash
 rrg_experiment.bash
+nv_experiment.bash
 job_*
 out_*

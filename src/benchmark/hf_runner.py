@@ -146,8 +146,7 @@ def run_inference(
                 "image_paths": image_paths,
                 "predictions": predictions_list,
                 "references": references_list,
-                "labels": labels_list,
-                "num_images": len(images),
+                "labels": labels_list
             })
 
             processed += len(images)
@@ -157,11 +156,77 @@ def run_inference(
     return results
 
 
+from typing import Any, Iterable
+
+def _broadcast_get(value: Any, i: int, n: int) -> Any:
+    """
+    Return the i-th element of a per-image field, handling common edge cases:
+    - If value is a list of length n: return value[i]
+    - If value is a list of length 1: broadcast (repeat) value[0] for all i
+    - If value is a scalar (e.g., a single string): broadcast it for all i
+    - Otherwise: return None
+    """
+    if value is None:
+        return None
+
+    # If it's already a list/tuple (per-image), index or broadcast
+    if isinstance(value, (list, tuple)):
+        if len(value) == n:
+            return value[i]
+        if len(value) == 1:
+            return value[0]
+        # If lengths don't match and it's not a single-item list, fail gracefully
+        return None
+
+    # If it's a scalar (e.g., a single prediction string), broadcast it
+    return value
+
+
+def flatten_results(results: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Convert a list of "batched" result dicts (where each field may be a list per image)
+    into a flat list of dicts (one dict per image), with broadcasting when needed.
+    """
+    flat: list[dict[str, Any]] = []
+
+    for r in results:
+        image_paths = r.get("image_paths", [])
+        n = len(image_paths)
+
+        # Copy any extra metadata into every per-image item
+        shared = {
+            k: v for k, v in r.items()
+            if k not in {"image_paths", "predictions", "references", "labels"}
+        }
+
+        preds = r.get("predictions", None)
+        refs = r.get("references", None)
+        labs = r.get("labels", None)
+
+        for i in range(n):
+            item = dict(shared)
+
+            # Store one item per image
+            item["image_path"] = image_paths[i]
+            item["prediction"] = _broadcast_get(preds, i, n)
+            item["reference"] = _broadcast_get(refs, i, n)
+            item["label"] = _broadcast_get(labs, i, n)
+
+            flat.append(item)
+
+    return flat
+
+
 def write_json(path: Path, results: Iterable[dict[str, Any]]) -> None:
-    """Write results as a JSON array."""
+    """Write results as a JSON array (flattened per image)."""
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Flatten batched results -> one dict per image
+    flat = flatten_results(results)
+
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(list(results), handle, ensure_ascii=False, indent=2)
+        json.dump(flat, handle, ensure_ascii=False, indent=2)
+
 
 
 def _extract_text(output: Any) -> str:
