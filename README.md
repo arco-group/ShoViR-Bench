@@ -37,7 +37,7 @@ Enviroments:
 
 .venv_RRG: CXRMateED, MEDGEMMA, MAIRA-2
 
-.venv_nv: NV-reason-CXR
+.venv_nv: NV-reason-CXR, CheXOne (Reasoning Model Backbones - Qwen2.5VL)
 
 .SC_Libra_venv: Libra, Llava-Rad
 
