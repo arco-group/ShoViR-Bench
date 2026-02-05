@@ -8,7 +8,7 @@ model_caching/
 outputs/
 data/
 .models_cache/
-#.vscode/launch.json
+.vscode/launch.json
 SC_Libra_venv/
 .SC_Libra_venv/
 RaDialog-interactive-radiology-report-generation
