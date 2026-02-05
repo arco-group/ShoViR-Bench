@@ -7,3 +7,6 @@
 [submodule "third_party/GREEN"]
 	path = third_party/GREEN
 	url = https://github.com/Stanford-AIMI/GREEN.git
+[submodule "GREEN"]
+	path = GREEN
+	url = https://github.com/Stanford-AIMI/GREEN.git
