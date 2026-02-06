@@ -14,6 +14,7 @@ Output structure:
     ├── {Category}_samples.json     # Images with regions split by disease/co-occurrence
     └── summary.json                # Overall statistics
 
+
 Sample format for verified_samples.json (imagenome-style):
     {
         "image_id": {
