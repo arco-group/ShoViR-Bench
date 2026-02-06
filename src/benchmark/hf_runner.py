@@ -68,6 +68,10 @@ def run_inference(
     Returns:
         List of result dictionaries with predictions and references
     """
+
+
+
+    
     _prompt_key, prompt_text = _resolve_prompt(config)
     preprocess_fn = _resolve_preprocess(config.experiment)
     model = _build_model_instance(config)

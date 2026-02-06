@@ -4,11 +4,16 @@ This project is tested with **Python 3.10.4**.
 
 ## 1) Create and activate a virtual environment (Python 3.10.4)
 
+module load Python/3.10.4-GCCcore-11.3.0
+
+
 ```bash
-python3.10 -m venv .venv
-source .venv/bin/activate
-python -V   # should print Python 3.10.4
-python -m pip install -U pip
+module purge
+module load Python/3.10.4-GCCcore-11.3.0
+source .venv_eval/bin/activate
+
+python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/google__medgemma-1.5-4b-it_medgemma_default.json
+
 ```
 
 > On HPC systems, you may need to load the correct Python module first (e.g., `module load Python/3.10.4`).

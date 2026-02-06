@@ -365,7 +365,7 @@ def derive_experiment_dataset_excel_path(input_path: str) -> Path:
         if idx + 2 < len(parts):
             dataset = parts[idx + 2]
 
-    return Path("results") / experiment / dataset / "results.xlsx"
+    return Path("results") / experiment / dataset / "results.csv"
 
 
 def upsert_experiment_excel(excel_path: Path, model_name: str, row_dict: Dict[str, float]) -> None:
@@ -393,7 +393,7 @@ def upsert_experiment_excel(excel_path: Path, model_name: str, row_dict: Dict[st
     df = df.sort_index()
     df = df.reindex(sorted(df.columns), axis=1)
 
-    df.to_excel(excel_path)
+    df.to_csv(excel_path)
 
 
 def breakdown_output_dir_for_mode(filepath: str, output_mode: str) -> Path:
