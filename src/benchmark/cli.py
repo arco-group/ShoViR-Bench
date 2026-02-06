@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse
 import json
+import re
 from pathlib import Path
 from .config import BenchmarkConfig, ExperimentType
 from .hf_runner import run_inference, write_json
@@ -100,32 +101,32 @@ def _safe_path_segment(value: str) -> str:
     """Make a string safe to be used inside filenames/paths."""
     return value.replace("/", "__").replace("\\", "__").replace(" ", "_")
 
+_VERSION_RE = re.compile(r"^\d+(?:\.\d+)+$")
 
 def _extract_dataset_name(data_path: str) -> str:
     """
-    Extract dataset name from data path.
+    Extract a dataset name from a filesystem path.
 
-    Examples:
-        'data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images' -> 'padchest-gr'
-        'data/mimic-cxr/images' -> 'mimic-cxr'
-        '/absolute/path/data/dataset-name/...' -> 'dataset-name'
+    Heuristic:
+    - If the path contains a version-like component (e.g. "2.1.0"), assume the dataset
+      name is the directory right before that version component.
+      Example: ".../mimic-cxr-jpg/2.1.0/files" -> "mimic-cxr-jpg"
+
+    Fallbacks:
+    - If the path contains a "data" directory, return the next component.
+      Example: ".../data/mimic-cxr/images" -> "mimic-cxr"
+    - Otherwise, return the parent directory name.
     """
-    path = Path(data_path)
-    parts = path.parts
+    parts = Path(str(data_path).strip()).parts
 
-    # Find 'data' in the path and get the next part
+    for i, p in enumerate(parts):
+        if _VERSION_RE.match(p) and i > 0:
+            return parts[i - 1]
     try:
-        data_idx = next(i for i, p in enumerate(parts) if p == 'data')
-        if data_idx + 1 < len(parts):
-            return parts[data_idx + 1]
+        data_idx = next(i for i, p in enumerate(parts) if p == "data")
+        return parts[data_idx + 1]
     except StopIteration:
-        pass
-
-    # Fallback: use the parent directory name
-    if path.is_dir():
-        return path.parent.name
-    return path.parent.parent.name
-
+        return Path(data_path).parent.name
 
 def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str, dataset: str) -> Path:
     model_id_seg = _safe_path_segment(model_id)
