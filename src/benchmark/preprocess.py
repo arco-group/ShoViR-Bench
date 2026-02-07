@@ -42,10 +42,20 @@ def _to_uint8_rgb(image: Image.Image) -> Image.Image:
 
 
 def _clip_bbox(bbox: list[int], w: int, h: int) -> tuple[int, int, int, int] | None:
-    """Clip [x1,y1,x2,y2] to image bounds. Returns None if invalid/empty."""
+    """Clip [x1,y1,x2,y2] to image bounds. Returns None if invalid/empty.
+
+    Accepts both pixel coordinates and normalized [0,1] coordinates.
+    Normalized bboxes (all values in [0,1]) are scaled to pixel coordinates.
+    """
     if len(bbox) != 4:
         return None
-    x1, y1, x2, y2 = bbox
+    x1, y1, x2, y2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+
+    # Detect normalized coordinates: all values fall within [0, 1]
+    if all(0.0 <= v <= 1.0 for v in (x1, y1, x2, y2)):
+        x1, x2 = x1 * w, x2 * w
+        y1, y2 = y1 * h, y2 * h
+
     x1 = max(0, min(int(x1), w))
     x2 = max(0, min(int(x2), w))
     y1 = max(0, min(int(y1), h))
@@ -57,7 +67,7 @@ def _clip_bbox(bbox: list[int], w: int, h: int) -> tuple[int, int, int, int] | N
 
 def _pick_random_region_bbox(sample: Sample, w: int, h: int) -> tuple[int, int, int, int] | None:
     """Randomly select one bbox from sample['regions'] and clip it to image bounds."""
-    regions = sample.get("regions") or []
+    regions = sample.get("regions") or sample.get("disease_regions")
     if not isinstance(regions, list) or len(regions) == 0:
         return None
 
@@ -70,6 +80,12 @@ def _pick_random_region_bbox(sample: Sample, w: int, h: int) -> tuple[int, int, 
             clipped = _clip_bbox(bbox, w, h)
             if clipped is not None:
                 valid.append(clipped)
+        elif isinstance(bbox, list) and len(bbox[0]) == 4:
+            for box in bbox:
+                if isinstance(box, list) and len(box) == 4:
+                    clipped = _clip_bbox(box, w, h)
+                    if clipped is not None:
+                        valid.append(clipped)
 
     if not valid:
         return None

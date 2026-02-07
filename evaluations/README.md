@@ -12,7 +12,21 @@ module purge
 module load Python/3.10.4-GCCcore-11.3.0
 source .venv_eval/bin/activate
 
+python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/google__medgemma-1.5-4b-it_medgemma_default.json --output-mode per-file
+python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/aehrc__cxrmate-rrg24_cxrmateed_default.json --output-mode per-file
+
+python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/Chantal__RaDialog-interactive-radiology-report-generation_radialog_default.json --output-mode per-file
+
+python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/microsoft__maira-2_maira2_default.json --output-mode per-file
+
+python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/nvidia__NV-Reason-CXR-3B_nv_reason_default.json --output-mode per-file
+
+python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/StanfordAIMI__CheXagent-2-3b-srrg-findings_chexagent_default.json --output-mode per-file
+
+
 python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/google__medgemma-1.5-4b-it_medgemma_default.json
+
+
 
 ```
 

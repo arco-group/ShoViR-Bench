@@ -698,6 +698,30 @@
         // EXPERIMENTS: OCO (Object Class Occlusion)
         // ============================================================
         {
+            "name": "Exp: MedGemma OCO100",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p100",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "40"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+                {
             "name": "Exp: MedGemma OCO50",
             "type": "debugpy",
             "request": "launch",
@@ -708,7 +732,7 @@
                 "--model", "medgemma",
                 "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
                 "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
-                "--experiment", "oco_p50",
+                "--experiment", "oco_p100",
                 "--output-dir", "outputs",
                 "--cache-dir", ".models_cache",
                 "--device", "cuda:0",
