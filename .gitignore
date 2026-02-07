@@ -18,6 +18,7 @@ nv_experiment.bash
 job_*
 out_*
 /logs
+/other_codes
 results/
 .venv_eval/
 evaluations/results
