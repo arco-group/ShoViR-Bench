@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple
+
+import numpy as np
 
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
@@ -40,17 +43,22 @@ def _resolve_prompt(config: BenchmarkConfig) -> tuple[str, str]:
     return prompt_key, PROMPTS[prompt_key]
 
 
-class _PreloadedDataset(Dataset):
-    """Wraps a list of pre-loaded (image, metadata) tuples as a torch Dataset."""
+class _CachedDataset(Dataset):
+    """Disk-cached dataset: preprocessed images stored as .npy on disk, metadata in RAM."""
 
-    def __init__(self, loaded: List[Tuple[Image.Image, str, str, list, str]]):
-        self._data = loaded
+    def __init__(self, cache_dir: str, file_indices: List[int], metadata: List[Tuple[str, str, list, str]]):
+        self._cache_dir = cache_dir
+        self._file_indices = file_indices
+        self._meta = metadata
 
     def __len__(self) -> int:
-        return len(self._data)
+        return len(self._meta)
 
     def __getitem__(self, idx: int) -> Tuple[Image.Image, str, str, list, str]:
-        return self._data[idx]
+        arr = np.load(os.path.join(self._cache_dir, f"{self._file_indices[idx]}.npy"))
+        image = Image.fromarray(arr)
+        path, report, labels, category = self._meta[idx]
+        return image, path, report, labels, category
 
 
 def _collate_pil(batch: List[Tuple[Image.Image, str, str, list, str]]) -> Tuple[List[Image.Image], List[str], List[str], List[list], List[str]]:
@@ -93,56 +101,67 @@ def run_inference(
     num_images = config.num_images
     total_samples = len(dataset)
 
-    # ── Phase 1: preload all images into RAM (multi-threaded) ──
-    def _load_one(idx_sample: Tuple[int, Tuple[str, Mapping[str, Any]]]) -> Optional[Tuple[int, Image.Image, str, str, list, str]]:
-        idx, (_sid, sample) = idx_sample
-        rel_img_path = sample.get("img_path")
-        if not rel_img_path:
-            return None
-        sample_with_ctx = dict(sample)
-        sample_with_ctx["data_dir"] = str(config.data_dir)
-        try:
-            image = preprocess_fn(sample_with_ctx)
-        except Exception:
-            return None
-        return (idx, image, str(rel_img_path), sample.get("report", ""), sample.get("labels", []), sample.get("target_category", ""))
+    with tempfile.TemporaryDirectory(prefix="benchmark_cache_") as cache_dir:
 
-    max_items = config.max_images if config.max_images is not None else total_samples
-    items_to_load = list(islice(enumerate(dataset.items()), max_items))
-    num_workers = min(os.cpu_count() or 4, 8)
+        # ── Phase 1: preprocess & cache to disk (multi-threaded) ──
+        def _preprocess_and_cache(idx_sample: Tuple[int, Tuple[str, Mapping[str, Any]]]) -> Optional[Tuple[int, str, str, list, str]]:
+            idx, (_sid, sample) = idx_sample
+            rel_img_path = sample.get("img_path")
+            if not rel_img_path:
+                return None
+            sample_with_ctx = dict(sample)
+            sample_with_ctx["data_dir"] = str(config.data_dir)
+            try:
+                image = preprocess_fn(sample_with_ctx)
+            except Exception:
+                return None
+            np.save(os.path.join(cache_dir, f"{idx}.npy"), np.asarray(image, dtype=np.uint8))
+            return (idx, str(rel_img_path), sample.get("report", ""), sample.get("labels", []), sample.get("target_category", ""))
 
-    loaded: List[Tuple[Image.Image, str, str, list, str]] = []
-    with ThreadPoolExecutor(max_workers=num_workers) as pool:
-        futures = {pool.submit(_load_one, item): item for item in items_to_load}
-        for future in tqdm(as_completed(futures), total=len(futures), desc=f"Loading images ({num_workers} workers)"):
-            result = future.result()
-            if result is not None:
-                idx, image, img_path, report, labels, category = result
-                loaded.append((idx, image, img_path, report, labels, category))
+        max_items = config.max_images if config.max_images is not None else total_samples
+        items_to_load = list(islice(enumerate(dataset.items()), max_items))
+        load_workers = min(os.cpu_count() or 4, 8)
 
-    # Sort by original dataset order, then drop the index
-    loaded.sort(key=lambda x: x[0])
-    loaded = [(img, path, rep, lab, cat) for _, img, path, rep, lab, cat in loaded]
+        entries: List[Tuple[int, str, str, list, str]] = []
+        with ThreadPoolExecutor(max_workers=load_workers) as pool:
+            futures = {pool.submit(_preprocess_and_cache, item): item for item in items_to_load}
+            for future in tqdm(as_completed(futures), total=len(futures), desc=f"Preprocessing ({load_workers} workers)"):
+                result = future.result()
+                if result is not None:
+                    entries.append(result)
 
-    total_loaded = len(loaded)
+        # Sort by original dataset order
+        entries.sort(key=lambda x: x[0])
+        file_indices = [e[0] for e in entries]
+        metadata = [(e[1], e[2], e[3], e[4]) for e in entries]
 
-    # ── Phase 2: inference via DataLoader ──
-    ds = _PreloadedDataset(loaded)
-    loader = DataLoader(ds, batch_size=num_images, shuffle=False, collate_fn=_collate_pil)
+        total_loaded = len(metadata)
 
-    for images, image_paths, references_list, labels_list, categories_list in tqdm(loader, desc=f"Inference (batch={num_images})"):
-        outputs = model(images, prompt_text)
-        predictions_list = [_extract_text(o) for o in outputs]
+        # ── Phase 2: inference via DataLoader (reads from disk cache) ──
+        ds = _CachedDataset(cache_dir, file_indices, metadata)
+        dl_workers = min(4, load_workers)
+        loader = DataLoader(
+            ds,
+            batch_size=num_images,
+            shuffle=False,
+            num_workers=dl_workers,
+            prefetch_factor=2,
+            collate_fn=_collate_pil,
+        )
 
-        result = {
-            "image_paths": image_paths,
-            "predictions": predictions_list,
-            "references": references_list,
-            "labels": labels_list,
-        }
-        if any(categories_list):
-            result["target_categories"] = categories_list
-        results.append(result)
+        for images, image_paths, references_list, labels_list, categories_list in tqdm(loader, desc=f"Inference (batch={num_images})"):
+            outputs = model(images, prompt_text)
+            predictions_list = [_extract_text(o) for o in outputs]
+
+            result = {
+                "image_paths": image_paths,
+                "predictions": predictions_list,
+                "references": references_list,
+                "labels": labels_list,
+            }
+            if any(categories_list):
+                result["target_categories"] = categories_list
+            results.append(result)
 
     return results
 

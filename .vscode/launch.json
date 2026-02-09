@@ -761,7 +761,9 @@
                 "--cache-dir", ".models_cache",
                 "--device", "cuda:0",
                 "--trust-remote-code",
-                "--num-images", "100"
+                "--dtype", "bfloat16",
+                "--num-images", "100",
+                //"--max-images", "200",
             ],
             "env": {
                 "HF_TOKEN": "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"
