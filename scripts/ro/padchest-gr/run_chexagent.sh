@@ -51,8 +51,13 @@ python -m src.benchmark.cli \
     --cache-dir .models_cache \
     --device cuda:0 \
     --dtype bfloat16 \
-    --num-images 40
+    --trust-remote-code \ 
+    --num-images 40 \ 
+
+
+
 
 echo ""
+
 echo "=== Job Complete ==="
 echo "End time: $(date)"

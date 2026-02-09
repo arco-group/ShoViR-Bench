@@ -590,8 +590,7 @@
                 "--device", "cuda:0",
                 "--dtype", "bfloat16",
                 "--trust-remote-code",
-                "--num-images", "2",
-                "--max-images", "4"
+                "--num-images", "128",
             ],
             "env": {
                 "HF_TOKEN": "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"

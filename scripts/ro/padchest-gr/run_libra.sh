@@ -51,6 +51,7 @@ python -m src.benchmark.cli \
     --cache-dir .models_cache \
     --device cuda:0 \
     --dtype bfloat16 \
+    --trust-remote-code \
     --num-images 24
 
 echo ""

@@ -52,7 +52,7 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 256
+    --num-images 128
 
 echo ""
 echo "=== Job Complete ==="
