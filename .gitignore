@@ -22,5 +22,6 @@ out_*
 /logs
 results/
 .venv_eval/
-.venv_chexagent
+.venv_chexagent/
+.radialog_venv/
 evaluations/results
