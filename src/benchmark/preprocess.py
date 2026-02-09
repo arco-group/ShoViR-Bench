@@ -66,10 +66,23 @@ def _clip_bbox(bbox: list[int], w: int, h: int) -> tuple[int, int, int, int] | N
 
 
 def _pick_random_region_bbox(sample: Sample, w: int, h: int) -> tuple[int, int, int, int] | None:
-    """Randomly select one bbox from sample['regions'] and clip it to image bounds."""
+    """Randomly select one bbox from sample['regions'] and clip it to image bounds.
+
+    If sample contains a 'target_category', only regions whose 'chexpert_categories'
+    include that category are considered.
+    """
     regions = sample.get("regions") or sample.get("disease_regions")
     if not isinstance(regions, list) or len(regions) == 0:
         return None
+
+    target_category = sample.get("target_category")
+    if target_category:
+        regions = [
+            r for r in regions
+            if isinstance(r, dict) and target_category in r.get("chexpert_categories", [])
+        ]
+        if not regions:
+            return None
 
     valid: list[tuple[int, int, int, int]] = []
     for r in regions:
@@ -226,9 +239,35 @@ def all_noise_mean(sample: Sample) -> Image.Image:
     return Image.fromarray(out, mode="RGB")
 
 
+# Empirical bbox size stats from PadChest-GR verified_samples.json (2518 bboxes).
+# Normalized [0,1] coordinates.
+_BBOX_WIDTH_MEAN, _BBOX_WIDTH_STD = 0.226, 0.137
+_BBOX_HEIGHT_MEAN, _BBOX_HEIGHT_STD = 0.250, 0.169
+_BBOX_MIN_FRAC = 0.026  # observed min width
+_BBOX_MAX_FRAC = 0.984  # observed max height
+
+
+def _generate_random_bbox(w: int, h: int) -> tuple[int, int, int, int]:
+    """Generate a random bbox sized to match the empirical disease-region distribution."""
+    w_frac = float(np.clip(np.random.normal(_BBOX_WIDTH_MEAN, _BBOX_WIDTH_STD), _BBOX_MIN_FRAC, _BBOX_MAX_FRAC))
+    h_frac = float(np.clip(np.random.normal(_BBOX_HEIGHT_MEAN, _BBOX_HEIGHT_STD), _BBOX_MIN_FRAC, _BBOX_MAX_FRAC))
+
+    box_w = max(1, int(w * w_frac))
+    box_h = max(1, int(h * h_frac))
+
+    box_w = min(box_w, w)
+    box_h = min(box_h, h)
+
+    x1 = int(np.random.randint(0, w - box_w + 1))
+    y1 = int(np.random.randint(0, h - box_h + 1))
+    x2 = x1 + box_w
+    y2 = y1 + box_h
+
+    return x1, y1, x2, y2
+
 def object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
     """
-    Randomly pick one bbox from sample['regions'] and apply matched correlated noise within that bbox.
+    Randomly pick one bbox from sample['regions'] and apply matched correlated noise within that bbox. Every image principal bbox. 
 
     This is OCO (Object Class Occlusion) - occludes annotated regions.
     """
@@ -249,34 +288,78 @@ def object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
     return Image.fromarray(out, mode="RGB")
 
 
-def _generate_random_bbox(
-    w: int,
-    h: int,
-    min_size_frac: float = 0.05,
-    max_size_frac: float = 0.25,
-) -> tuple[int, int, int, int]:
-    """Generate a random bounding box within image bounds."""
-    min_w = int(w * min_size_frac)
-    max_w = int(w * max_size_frac)
-    min_h = int(h * min_size_frac)
-    max_h = int(h * max_size_frac)
+def _extract_bboxes_from_regions(regions: list, w: int, h: int) -> list[tuple[int, int, int, int]]:
+    """Extract and clip all bboxes from a list of region dicts."""
+    bboxes: list[tuple[int, int, int, int]] = []
+    if not isinstance(regions, list):
+        return bboxes
+    for r in regions:
+        if not isinstance(r, dict):
+            continue
+        bbox = r.get("bbox")
+        if isinstance(bbox, list) and len(bbox) == 4:
+            clipped = _clip_bbox(bbox, w, h)
+            if clipped is not None:
+                bboxes.append(clipped)
+        elif isinstance(bbox, list) and bbox and len(bbox[0]) == 4:
+            for box in bbox:
+                if isinstance(box, list) and len(box) == 4:
+                    clipped = _clip_bbox(box, w, h)
+                    if clipped is not None:
+                        bboxes.append(clipped)
+    return bboxes
 
-    box_w = int(np.random.randint(min_w, max_w + 1))
-    box_h = int(np.random.randint(min_h, max_h + 1))
 
-    x1 = int(np.random.randint(0, w - box_w + 1))
-    y1 = int(np.random.randint(0, h - box_h + 1))
-    x2 = x1 + box_w
-    y2 = y1 + box_h
-
-    return x1, y1, x2, y2
+def _collect_all_annotated_bboxes(sample: Sample, w: int, h: int) -> list[tuple[int, int, int, int]]:
+    """Collect all clipped bboxes from disease_regions and co_occurrence_regions."""
+    disease = sample.get("disease_regions") or sample.get("regions") or []
+    co_occ = sample.get("co_occurrence_regions", [])
+    return _extract_bboxes_from_regions(disease, w, h) + _extract_bboxes_from_regions(co_occ, w, h)
 
 
-def random_object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
+def _bboxes_overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    """Return True if two (x1, y1, x2, y2) bboxes overlap."""
+    return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
+
+
+def _generate_non_overlapping_bbox(
+    w: int, h: int, exclude_bboxes: list[tuple[int, int, int, int]], max_retries: int = 100,
+) -> tuple[int, int, int, int] | None:
+    """Generate a random bbox that does not overlap with any excluded bbox."""
+    for _ in range(max_retries):
+        candidate = _generate_random_bbox(w, h)
+        if not any(_bboxes_overlap(candidate, eb) for eb in exclude_bboxes):
+            return candidate
+    return None
+
+
+def _fast_noise_fill_bbox(
+    img_arr: np.ndarray,
+    x1: int, y1: int, x2: int, y2: int,
+    center: np.ndarray,
+    scale: np.ndarray,
+    p: float,
+) -> None:
+    """Fill a single bbox region with noise in-place. Avoids full-image operations."""
+    bh, bw = y2 - y1, x2 - x1
+    noise = np.random.randn(bh, bw, 3).astype(np.float32) * scale + center
+    noise = np.clip(noise, 0.0, 255.0)
+    if p >= 1.0:
+        img_arr[y1:y2, x1:x2] = noise.astype(np.uint8)
+    else:
+        orig = img_arr[y1:y2, x1:x2].astype(np.float32)
+        blended = orig * (1.0 - p) + noise * p
+        img_arr[y1:y2, x1:x2] = np.clip(blended, 0.0, 255.0).astype(np.uint8)
+
+
+def random_occlusion(sample: Sample, *, p: float) -> Image.Image:
     """
-    Apply matched correlated noise to a random region (not based on annotations).
+    Apply noise to N random bboxes outside all annotated regions
+    (disease_regions + co_occurrence_regions), where N is randomly drawn from
+    [1, total_annotated_bbox_count].
 
-    This is ROCO (Random Object Class Occlusion) - occludes random regions.
+    Fast path: computes image stats once, then fills each bbox directly
+    without full-image noise generation, blur, or feathered blending.
     """
     image = _to_uint8_rgb(_load_image_from_sample(sample))
     img_arr = np.array(image, dtype=np.uint8)
@@ -285,12 +368,30 @@ def random_object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
     if p <= 0.0:
         return image
 
-    x1, y1, x2, y2 = _generate_random_bbox(w, h)
-    region_mask = np.zeros((h, w), dtype=bool)
-    region_mask[y1:y2, x1:x2] = True
+    annotated_bboxes = _collect_all_annotated_bboxes(sample, w, h)
+    total_count = len(annotated_bboxes)
+    n_target = int(np.random.randint(1, max(total_count, 1) + 1))
 
-    fill = _matched_correlated_noise_fill(img_arr, region_mask, blur_radius=2.0)
-    out = _blend_region(img_arr, fill, region_mask, p=p, feather_radius=6)
+    # Generate all non-overlapping bboxes
+    bboxes: list[tuple[int, int, int, int]] = []
+    for _ in range(n_target):
+        bbox = _generate_non_overlapping_bbox(w, h, annotated_bboxes)
+        if bbox is not None:
+            bboxes.append(bbox)
+
+    if not bboxes:
+        return image
+
+    # Compute image stats once (simple mean/std, no percentile trimming)
+    flat = img_arr.reshape(-1, 3).astype(np.float32)
+    center = flat.mean(axis=0)
+    scale = np.maximum(flat.std(axis=0), 1.0)
+
+    # Fill each bbox directly — no full-image arrays, no blur, no feathering
+    out = img_arr.copy()
+    for bx1, by1, bx2, by2 in bboxes:
+        _fast_noise_fill_bbox(out, bx1, by1, bx2, by2, center, scale, p)
+
     return Image.fromarray(out, mode="RGB")
 
 
@@ -310,7 +411,7 @@ def _parse_experiment_with_p(experiment: str) -> tuple[str, float] | None:
 
     Returns (base_name, p_value) or None if no match.
     """
-    m = re.fullmatch(r"(oco|roco|ObjectClassOcclusion)_p(\d{1,3})", experiment, re.IGNORECASE)
+    m = re.fullmatch(r"(ro|oco|roco|ObjectClassOcclusion)_p(\d{1,3})", experiment, re.IGNORECASE)
     if not m:
         return None
     base = m.group(1).lower()
@@ -340,6 +441,8 @@ def _resolve_preprocess(experiment: str) -> PreprocessFn:
             return lambda sample: object_class_occlusion(sample, p=p)
         elif base == "roco":
             return lambda sample: random_object_class_occlusion(sample, p=p)
+        elif base == "ro":
+            return lambda sample: random_occlusion(sample, p=p)
 
     # Legacy support
     p = _parse_p_from_experiment(experiment)

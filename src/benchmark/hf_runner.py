@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Mapping, Tuple
+from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple
 
 from PIL import Image
-from tqdm import tqdm 
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 from .config import BenchmarkConfig
 from .models import MODEL_CLASSES, MODEL_SPECS
 from .prompts import PROMPTS
@@ -37,17 +40,27 @@ def _resolve_prompt(config: BenchmarkConfig) -> tuple[str, str]:
     return prompt_key, PROMPTS[prompt_key]
 
 
-def _batch_samples(
-    dataset: Mapping[str, Mapping[str, Any]],
-    batch_size: int,
-) -> Iterator[List[Tuple[str, Mapping[str, Any]]]]:
-    """Yield batches of (sample_id, sample) tuples."""
-    items = iter(dataset.items())
-    while True:
-        batch = list(islice(items, batch_size))
-        if not batch:
-            break
-        yield batch
+class _PreloadedDataset(Dataset):
+    """Wraps a list of pre-loaded (image, metadata) tuples as a torch Dataset."""
+
+    def __init__(self, loaded: List[Tuple[Image.Image, str, str, list, str]]):
+        self._data = loaded
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __getitem__(self, idx: int) -> Tuple[Image.Image, str, str, list, str]:
+        return self._data[idx]
+
+
+def _collate_pil(batch: List[Tuple[Image.Image, str, str, list, str]]) -> Tuple[List[Image.Image], List[str], List[str], List[list], List[str]]:
+    """Collate that keeps PIL images as-is (no tensor conversion)."""
+    images = [item[0] for item in batch]
+    paths = [item[1] for item in batch]
+    reports = [item[2] for item in batch]
+    labels = [item[3] for item in batch]
+    categories = [item[4] for item in batch]
+    return images, paths, reports, labels, categories
 
 
 def run_inference(
@@ -76,86 +89,60 @@ def run_inference(
     preprocess_fn = _resolve_preprocess(config.experiment)
     model = _build_model_instance(config)
     results: list[dict[str, Any]] = []
-    processed = 0
 
     num_images = config.num_images
     total_samples = len(dataset)
 
-    if num_images == 1:
-        # Single image mode
-        for _sample_id, sample in tqdm(dataset.items(), total=total_samples, desc="Inference"):
-            rel_img_path = sample.get("img_path")
-            if not rel_img_path:
-                continue
+    # ── Phase 1: preload all images into RAM (multi-threaded) ──
+    def _load_one(idx_sample: Tuple[int, Tuple[str, Mapping[str, Any]]]) -> Optional[Tuple[int, Image.Image, str, str, list, str]]:
+        idx, (_sid, sample) = idx_sample
+        rel_img_path = sample.get("img_path")
+        if not rel_img_path:
+            return None
+        sample_with_ctx = dict(sample)
+        sample_with_ctx["data_dir"] = str(config.data_dir)
+        try:
+            image = preprocess_fn(sample_with_ctx)
+        except Exception:
+            return None
+        return (idx, image, str(rel_img_path), sample.get("report", ""), sample.get("labels", []), sample.get("target_category", ""))
 
-            sample_with_ctx = dict(sample)
-            sample_with_ctx["data_dir"] = str(config.data_dir)
+    max_items = config.max_images if config.max_images is not None else total_samples
+    items_to_load = list(islice(enumerate(dataset.items()), max_items))
+    num_workers = min(os.cpu_count() or 4, 8)
 
-            try:
-                image = preprocess_fn(sample_with_ctx)
-            except Exception:
-                continue
+    loaded: List[Tuple[Image.Image, str, str, list, str]] = []
+    with ThreadPoolExecutor(max_workers=num_workers) as pool:
+        futures = {pool.submit(_load_one, item): item for item in items_to_load}
+        for future in tqdm(as_completed(futures), total=len(futures), desc=f"Loading images ({num_workers} workers)"):
+            result = future.result()
+            if result is not None:
+                idx, image, img_path, report, labels, category = result
+                loaded.append((idx, image, img_path, report, labels, category))
 
-            output = model(image, prompt_text)
-            predictions = _extract_text(output)
-            references = sample.get("report", "")
-            labels = sample.get("labels", [])
+    # Sort by original dataset order, then drop the index
+    loaded.sort(key=lambda x: x[0])
+    loaded = [(img, path, rep, lab, cat) for _, img, path, rep, lab, cat in loaded]
 
-            results.append({
-                "image_path": str(rel_img_path),
-                "predictions": predictions,
-                "references": references,
-                "labels": labels,
-            })
+    total_loaded = len(loaded)
 
-            processed += 1
-            if config.max_images is not None and processed >= config.max_images:
-                break
-    else:
-        # Multi-image mode: batch N independent conversations into
-        # a single model.generate() call for GPU efficiency.
-        # Each image gets its own conversation with the same prompt.
-        total_batches = (total_samples + num_images - 1) // num_images
-        for batch in tqdm(_batch_samples(dataset, num_images), total=total_batches, desc=f"Inference (batch={num_images})"):
-            images: List[Image.Image] = []
-            image_paths: List[str] = []
-            references_list: List[str] = []
-            labels_list: List[List[int]] = []
+    # ── Phase 2: inference via DataLoader ──
+    ds = _PreloadedDataset(loaded)
+    loader = DataLoader(ds, batch_size=num_images, shuffle=False, collate_fn=_collate_pil)
 
-            for _sample_id, sample in batch:
-                rel_img_path = sample.get("img_path")
-                if not rel_img_path:
-                    continue
+    for images, image_paths, references_list, labels_list, categories_list in tqdm(loader, desc=f"Inference (batch={num_images})"):
+        outputs = model(images, prompt_text)
+        predictions_list = [_extract_text(o) for o in outputs]
 
-                sample_with_ctx = dict(sample)
-                sample_with_ctx["data_dir"] = str(config.data_dir)
-
-                try:
-                    image = preprocess_fn(sample_with_ctx)
-                    images.append(image)
-                    image_paths.append(str(rel_img_path))
-                    references_list.append(sample.get("report", ""))
-                    labels_list.append(sample.get("labels", []))
-                except Exception:
-                    continue
-
-            if not images:
-                continue
-
-            # Single generate() call with N independent conversations
-            outputs = model(images, prompt_text)
-            predictions_list = [_extract_text(o) for o in outputs]
-
-            results.append({
-                "image_paths": image_paths,
-                "predictions": predictions_list,
-                "references": references_list,
-                "labels": labels_list
-            })
-
-            processed += len(images)
-            if config.max_images is not None and processed >= config.max_images:
-                break
+        result = {
+            "image_paths": image_paths,
+            "predictions": predictions_list,
+            "references": references_list,
+            "labels": labels_list,
+        }
+        if any(categories_list):
+            result["target_categories"] = categories_list
+        results.append(result)
 
     return results
 
@@ -200,12 +187,13 @@ def flatten_results(results: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         # Copy any extra metadata into every per-image item
         shared = {
             k: v for k, v in r.items()
-            if k not in {"image_paths", "predictions", "references", "labels"}
+            if k not in {"image_paths", "predictions", "references", "labels", "target_categories"}
         }
 
         preds = r.get("predictions", None)
         refs = r.get("references", None)
         labs = r.get("labels", None)
+        cats = r.get("target_categories", None)
 
         for i in range(n):
             item = dict(shared)
@@ -215,6 +203,9 @@ def flatten_results(results: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             item["prediction"] = _broadcast_get(preds, i, n)
             item["reference"] = _broadcast_get(refs, i, n)
             item["label"] = _broadcast_get(labs, i, n)
+            cat = _broadcast_get(cats, i, n)
+            if cat:
+                item["target_category"] = cat
 
             flat.append(item)
 

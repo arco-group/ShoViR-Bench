@@ -1,8 +1,11 @@
 from __future__ import annotations
 import argparse
 import json
+import random
 import re
 from pathlib import Path
+
+import numpy as np
 from .config import BenchmarkConfig, ExperimentType
 from .hf_runner import run_inference, write_json
 from .io import iter_images, list_images
@@ -93,6 +96,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="Number of images per inference call (1 = single image, >1 = multi-image). Default: 1.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=3,
+        help="Random seed for reproducible bbox selection in OCO/ROCO experiments. Default: 3.",
+    )
 
     return parser
 
@@ -128,14 +137,14 @@ def _extract_dataset_name(data_path: str) -> str:
     except StopIteration:
         return Path(data_path).parent.name
 
-def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str, dataset: str) -> Path:
+def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str, dataset: str, seed: int) -> Path:
     model_id_seg = _safe_path_segment(model_id)
     prompt_key_seg = _safe_path_segment(prompt_key)
-    filename = f"{model_id_seg}_{prompt_key_seg}.json"
+    filename = f"{model_id_seg}_{prompt_key_seg}::seed={seed}.json"
 
     # For OCO/ROCO experiments, split into experiment_type/percentage format
     # e.g., "oco_p50" -> "oco/p50"
-    if experiment.startswith("oco_") or experiment.startswith("roco_"):
+    if experiment.startswith("oco_") or experiment.startswith("roco_") or experiment.startswith("ro_") :
         exp_parts = experiment.split("_", 1)  # Split into ["oco", "p50"] or ["roco", "p75"]
         if len(exp_parts) == 2:
             return Path(output_dir) / exp_parts[0] / exp_parts[1] / dataset / filename
@@ -160,7 +169,7 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
     Returns:
         Dictionary mapping sample_id to sample data
     """
-    if dataset_name == "padchest-gr" and (experiment.startswith("oco") or experiment.startswith("roco")):
+    if dataset_name == "padchest-gr" and (experiment.startswith("oco") or experiment.startswith("ro")):
         # For OCO/ROCO experiments with padchest-gr, load all chexpert class files
         # excluding categories with less than 50 images
         # Navigate up to padchest-gr level: data_dir is .../BIMCV-Padchest-GR /PadChest_GR_images
@@ -185,13 +194,18 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
             if category_file.exists():
                 with category_file.open("r", encoding="utf-8") as f:
                     category_data = json.load(f)
-                    # Category files are lists, convert to dict with img_path as key
                     if isinstance(category_data, list):
                         for sample in category_data:
-                            dataset[sample["img_path"]] = sample
+                            composite_key = f"{sample['img_path']}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
                     else:
-                        # If already a dict, merge directly
-                        dataset.update(category_data)
+                        for key, sample in category_data.items():
+                            composite_key = f"{key}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
     else:
         # For baseline or other datasets, use the provided data_json file as usual
         with Path(data_json_path).open("r", encoding="utf-8") as f:
@@ -213,7 +227,7 @@ def main() -> int:
     output_path = (
         Path(args.output)
         if args.output is not None
-        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name)
+        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name, args.seed)
     )
 
     config = BenchmarkConfig(
@@ -231,6 +245,10 @@ def main() -> int:
         filter_labels=args.filter_labels,
         num_images=args.num_images,
     )
+
+    # Set random seed for reproducible bbox selection
+    np.random.seed(args.seed)
+    random.seed(args.seed)
 
     # Resolve and load dataset based on experiment type and dataset name
     dataset = _resolve_experiment_dataset(args.data_json, config.data_dir, dataset_name, args.experiment)
