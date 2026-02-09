@@ -20,4 +20,5 @@ out_*
 /logs
 results/
 .venv_eval/
+.venv_chexagent
 evaluations/results
