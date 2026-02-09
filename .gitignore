@@ -15,6 +15,8 @@ RaDialog-interactive-radiology-report-generation
 libra_experiment.bash
 rrg_experiment.bash
 nv_experiment.bash
+chexagent_experiment.bash
+radialog_experiment.bash
 job_*
 out_*
 /logs
