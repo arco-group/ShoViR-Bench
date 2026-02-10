@@ -12,16 +12,21 @@ Two output modes (selectable via CLI flag):
        .../outputs/baseline/mimic-cxr-jpg/foo.json
        -> results/baseline/mimic-cxr-jpg/foo.csv
 
-2) Per-experiment+dataset Excel (aggregated mode):
-   - Create/update one Excel file per (experiment, dataset), where:
+2) Per-experiment+dataset CSV (aggregated mode):
+   - Create/update one CSV file per (experiment, dataset), where:
        experiment = folder right after 'outputs'
        dataset    = folder right after experiment
    - Example:
        .../outputs/baseline/mimic-cxr-jpg/foo.json
-       -> results/baseline/mimic-cxr-jpg/results.xlsx
-     The row index is the JSON filename stem (e.g., "foo"), so each model/run becomes a row.
+       -> results/baseline/mimic-cxr-jpg/results.csv
+     Each model/run becomes a row. The row index is the JSON filename stem (e.g., "foo").
    - If bootstrap_ci=False, columns are metric names.
    - If bootstrap_ci=True, columns are flattened as metric_median / metric_ci_l / metric_ci_h.
+
+GREEN metric:
+- Optional (disabled by default). Enable with --compute-green.
+- Adds two columns: GREEN_mean and GREEN_std (no bootstrap CI for GREEN).
+- Uses GREEN model name configurable via --green-model-name.
 
 Breakdowns:
 - If enabled, saves CheXbert breakdown CSVs next to the chosen output location:
@@ -59,6 +64,15 @@ try:
     import wandb
 except ImportError:
     wandb = None
+
+
+# GREEN is optional; import only if requested.
+def _try_import_green():
+    try:
+        from green_score import GREEN  # type: ignore
+        return GREEN
+    except Exception:
+        return None
 
 
 # -----------------------------
@@ -292,7 +306,7 @@ def build_main_results_table(results: Dict[str, Any], bootstrap_ci: bool) -> pd.
 
 def main_results_to_single_row(main_results: pd.DataFrame, bootstrap_ci: bool) -> Dict[str, float]:
     """
-    Flatten main_results into a single dict suitable for one Excel row.
+    Flatten main_results into a single dict suitable for one aggregated CSV row.
 
     - bootstrap_ci=False: {metric: value}
     - bootstrap_ci=True : {metric_median: ..., metric_ci_l: ..., metric_ci_h: ...}
@@ -305,7 +319,7 @@ def main_results_to_single_row(main_results: pd.DataFrame, bootstrap_ci: bool) -
             row[col] = float(main_results.loc[idx, col])
         return row
 
-    for stat in main_results.index:  # median, ci_l, ci_h
+    for stat in main_results.index:
         for col in main_results.columns:
             row[f"{col}_{stat}"] = float(main_results.loc[stat, col])
 
@@ -343,14 +357,13 @@ def derive_per_file_output_paths(input_path: str) -> Dict[str, Path]:
     }
 
 
-def derive_experiment_dataset_excel_path(input_path: str) -> Path:
+def derive_experiment_dataset_results_csv(input_path: str) -> Path:
     """
-    Per-experiment+dataset output mode:
+    Per-experiment+dataset aggregated mode:
     - Find 'outputs/<experiment>/<dataset>/' and write to:
-        results/<experiment>/<dataset>/results.xlsx
+        results/<experiment>/<dataset>/results.csv
     - If 'outputs' is missing, fall back to:
-        results/unknown_experiment/unknown_dataset/results.xlsx
-    - If experiment or dataset are missing after 'outputs', fall back to 'unknown_*'.
+        results/unknown_experiment/unknown_dataset/results.csv
     """
     p = Path(input_path).resolve()
     parts = list(p.parts)
@@ -368,17 +381,17 @@ def derive_experiment_dataset_excel_path(input_path: str) -> Path:
     return Path("results") / experiment / dataset / "results.csv"
 
 
-def upsert_experiment_excel(excel_path: Path, model_name: str, row_dict: Dict[str, float]) -> None:
+def upsert_aggregated_csv(csv_path: Path, model_name: str, row_dict: Dict[str, float]) -> None:
     """
-    Create or update the per-experiment Excel file.
+    Create or update the aggregated CSV file.
     - Each model_name is a row index.
     - If the model already exists, overwrite its row.
     - Otherwise append a new row.
     """
-    excel_path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if excel_path.exists():
-        df = pd.read_excel(excel_path, index_col=0)
+    if csv_path.exists():
+        df = pd.read_csv(csv_path, index_col=0)
     else:
         df = pd.DataFrame()
 
@@ -393,7 +406,7 @@ def upsert_experiment_excel(excel_path: Path, model_name: str, row_dict: Dict[st
     df = df.sort_index()
     df = df.reindex(sorted(df.columns), axis=1)
 
-    df.to_csv(excel_path)
+    df.to_csv(csv_path)
 
 
 def breakdown_output_dir_for_mode(filepath: str, output_mode: str) -> Path:
@@ -406,8 +419,32 @@ def breakdown_output_dir_for_mode(filepath: str, output_mode: str) -> Path:
         per_file_paths = derive_per_file_output_paths(filepath)
         return per_file_paths["main"].parent
 
-    excel_path = derive_experiment_dataset_excel_path(filepath)
-    return excel_path.parent
+    csv_path = derive_experiment_dataset_results_csv(filepath)
+    return csv_path.parent
+
+
+# -----------------------------
+# GREEN metric (optional)
+# -----------------------------
+def compute_green_metric(
+    refs: List[str],
+    hyps: List[str],
+    model_name: str,
+    output_dir: Path,
+) -> Dict[str, float]:
+    """
+    Compute GREEN metric and return only mean and std.
+    """
+    GREEN = _try_import_green()
+    if GREEN is None:
+        raise ImportError(
+            "GREEN is not available. Make sure 'green_score' is installed and importable "
+            "(e.g., the GREEN submodule/package is in PYTHONPATH)."
+        )
+
+    green_scorer = GREEN(model_name, output_dir=str(output_dir))
+    mean, std, _green_score_list, _summary, _result_df = green_scorer(refs, hyps)
+    return {"GREEN_mean": float(mean), "GREEN_std": float(std)}
 
 
 # -----------------------------
@@ -421,6 +458,8 @@ def run(
     run_name: str = "mimic_cxr_eval",
     save_breakdowns: bool = False,
     output_mode: str = "per-file",  # "per-file" or "per-experiment"
+    compute_green: bool = False,
+    green_model_name: str = "StanfordAIMI/GREEN-radllama2-7b",
 ) -> None:
     # Load JSON list of samples
     with open(filepath, "r", encoding="utf-8") as f:
@@ -432,7 +471,7 @@ def run(
         preds.append(item.get("prediction", ""))
         refs.append(item.get("reference", ""))
 
-    # Default scorers
+    # Default scorers (GREEN is controlled separately)
     if scorers is None:
         scorers = ["CheXbert", "F1-RadGraph", "BLEU-1", "BLEU-4", "ROUGE-L"]
 
@@ -442,36 +481,74 @@ def run(
     print("\n")
     print(f"Total reports: {len(preds)}\n")
 
-    print("========== Main Results ==========")
+    print("========== Main Results (core) ==========")
     main_results = build_main_results_table(results, bootstrap_ci=bootstrap_ci)
     print(main_results)
     print("")
 
+    # Compute GREEN if requested (adds GREEN_mean and GREEN_std)
+    green_vals: Dict[str, float] = {}
+    if compute_green:
+        out_dir_for_green = breakdown_output_dir_for_mode(filepath, output_mode)
+        out_dir_for_green.mkdir(parents=True, exist_ok=True)
+        green_vals = compute_green_metric(
+            refs=refs,
+            hyps=preds,
+            model_name=green_model_name,
+            output_dir=out_dir_for_green,
+        )
+        print("========== GREEN ==========")
+        print(green_vals)
+        print("")
+
     # Save outputs based on the selected mode
+    model_name = Path(filepath).with_suffix("").name
+
     if output_mode == "per-file":
         out_paths = derive_per_file_output_paths(filepath)
         out_paths["main"].parent.mkdir(parents=True, exist_ok=True)
+
+        # If GREEN is computed, add it to the saved CSV
+        if compute_green:
+            if bootstrap_ci:
+                # Add GREEN columns to each row, best effort:
+                # Put values on 'median' row and NaN elsewhere, since GREEN has no CI.
+                for col in ("GREEN_mean", "GREEN_std"):
+                    main_results[col] = np.nan
+                if "median" in main_results.index:
+                    main_results.loc["median", "GREEN_mean"] = green_vals["GREEN_mean"]
+                    main_results.loc["median", "GREEN_std"] = green_vals["GREEN_std"]
+            else:
+                main_results["GREEN_mean"] = green_vals["GREEN_mean"]
+                main_results["GREEN_std"] = green_vals["GREEN_std"]
+
         main_results.to_csv(out_paths["main"], index=True)
         print(f"Saved per-file main results to: {out_paths['main']}")
 
     elif output_mode == "per-experiment":
-        excel_path = derive_experiment_dataset_excel_path(filepath)
-        # Use the JSON filename stem as the row identifier (model/run name)
-        model_name = Path(filepath).with_suffix("").name
+        csv_path = derive_experiment_dataset_results_csv(filepath)
+
         row_dict = main_results_to_single_row(main_results, bootstrap_ci=bootstrap_ci)
-        upsert_experiment_excel(excel_path, model_name=model_name, row_dict=row_dict)
-        print(f"Updated per-experiment Excel: {excel_path} (row='{model_name}')")
+        # Add GREEN to the aggregated row (always scalar columns)
+        if compute_green:
+            row_dict.update(green_vals)
+
+        upsert_aggregated_csv(csv_path, model_name=model_name, row_dict=row_dict)
+        print(f"Updated aggregated CSV: {csv_path} (row='{model_name}')")
 
     else:
         raise ValueError("Invalid output_mode. Use 'per-file' or 'per-experiment'.")
 
-    # Optional W&B logging
+    # Optional W&B logging (GREEN included if computed)
     if wandb:
         wandb_results = {}
         if bootstrap_ci:
             for metric in main_results.columns:
                 for stat in main_results.index:
-                    wandb_results[f"{metric}-{stat}"] = float(main_results.loc[stat, metric])
+                    val = main_results.loc[stat, metric]
+                    if pd.isna(val):
+                        continue
+                    wandb_results[f"{metric}-{stat}"] = float(val)
         else:
             for metric in main_results.columns:
                 wandb_results[metric] = float(main_results.loc["score", metric])
@@ -484,7 +561,7 @@ def run(
         out_dir = breakdown_output_dir_for_mode(filepath, output_mode)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        prefix = Path(filepath).with_suffix("").name
+        prefix = model_name
         breakdown_p_path = out_dir / f"{prefix}__breakdown_p.csv"
         breakdown_n_path = out_dir / f"{prefix}__breakdown_n.csv"
         chexbert_detailed_path = out_dir / f"{prefix}__chexbert_detailed.csv"
@@ -535,10 +612,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-mode",
         type=str,
-        default="per-experiment",
+        default="per-file",
         choices=["per-file", "per-experiment"],
-        help="Output mode: 'per-file' saves one CSV per JSON; 'per-experiment' appends a row to results/<experiment>/<dataset>/results.xlsx.",
+        help="Output mode: 'per-file' saves one CSV per JSON; 'per-experiment' appends a row to results/<experiment>/<dataset>/results.csv.",
     )
+
+    # GREEN options
+    parser.add_argument(
+        "--compute-green",
+        action="store_true",
+        help="Compute GREEN metric and store GREEN_mean/GREEN_std in outputs.",
+    )
+    parser.add_argument(
+        "--green-model-name",
+        type=str,
+        default="StanfordAIMI/GREEN-radllama2-7b",
+        help="Hugging Face model name for GREEN.",
+    )
+
     return parser.parse_args()
 
 
@@ -554,5 +645,7 @@ if __name__ == "__main__":
         run_name=args.run_name,
         save_breakdowns=args.save_breakdowns,
         output_mode=args.output_mode,
+        compute_green=args.compute_green,
+        green_model_name=args.green_model_name,
     )
 
