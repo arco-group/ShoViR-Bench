@@ -15,10 +15,16 @@ RaDialog-interactive-radiology-report-generation
 libra_experiment.bash
 rrg_experiment.bash
 nv_experiment.bash
+chexagent_experiment.bash
+radialog_experiment.bash
+evaluation_metrics.bash
 job_*
 out_*
 /logs
 /other_codes
 results/
 .venv_eval/
+.venv_chexagent/
+.radialog_venv/
 evaluations/results
+evaluations/concat_results.py
