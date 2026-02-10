@@ -4,3 +4,6 @@
 [submodule "RaDialog-interactive-radiology-report-generation"]
 	path = RaDialog-interactive-radiology-report-generation
 	url = https://huggingface.co/ChantalPellegrini/RaDialog-interactive-radiology-report-generation
+[submodule "GREEN"]
+	path = GREEN
+	url = https://github.com/Stanford-AIMI/GREEN.git

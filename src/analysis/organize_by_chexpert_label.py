@@ -3,16 +3,19 @@ Organize PadChest-GR dataset by CheXpert labels for evaluation.
 
 This script creates files organized by CheXpert label where:
 - Each image contains all verified bounding boxes (regions)
+- Multiple bboxes for the same disease are saved as separate regions
 - CheXbert verifies the PadChest→CheXpert label remapping before saving
-- Both main output and per-category files use the same imagenome format
+- Main output uses imagenome format with all regions
+- Per-category files separate disease_regions from co_occurrence_regions
 
 Output structure:
     data/padchest-gr/chexpert-by-label/
-    ├── verified_samples.json       # All verified images with regions
-    ├── {Category}_samples.json     # Images with regions for that category
+    ├── verified_samples.json       # All verified images with all regions
+    ├── {Category}_samples.json     # Images with regions split by disease/co-occurrence
     └── summary.json                # Overall statistics
 
-Sample format (imagenome-style):
+
+Sample format for verified_samples.json (imagenome-style):
     {
         "image_id": {
             "img_path": "...",
@@ -23,6 +26,17 @@ Sample format (imagenome-style):
             ]
         }
     }
+
+Sample format for {Category}_samples.json:
+    [
+        {
+            "img_path": "...",
+            "report": "combined descriptions",
+            "labels": [14 CheXbert labels],
+            "disease_regions": [regions with this disease],
+            "co_occurrence_regions": [regions with other diseases in same image]
+        }
+    ]
 """
 
 import json
@@ -195,6 +209,42 @@ class CheXbertLabelVerifier:
         results, labels_vectors = self.verify_batch([text], [chexpert_category])
         return results[0][0], results[0][1], results[0][2], labels_vectors[0]
 
+    def predict_labels(self, sentences: List[str]) -> List[int]:
+        """
+        Run CheXbert on a list of sentences and return a combined label vector.
+        This predicts ALL labels without checking against expected categories.
+
+        Args:
+            sentences: List of finding sentences
+
+        Returns:
+            Combined label vector (14 integers) across all sentences.
+            Priority: 1 (positive) > 3 (uncertain) > 2 (negative) > 0 (blank)
+        """
+        if not sentences:
+            return [0] * self.num_conditions
+
+        # Filter empty sentences
+        valid_sentences = [s for s in sentences if s.strip()]
+        if not valid_sentences:
+            return [0] * self.num_conditions
+
+        outputs = self.model(valid_sentences)
+
+        # Combine across all sentences
+        combined = [0] * self.num_conditions
+        for sent_idx in range(len(valid_sentences)):
+            for cond_idx in range(self.num_conditions):
+                pred = int(outputs[cond_idx][sent_idx])
+                if pred == 1:
+                    combined[cond_idx] = 1
+                elif combined[cond_idx] != 1 and pred == 3:
+                    combined[cond_idx] = 3
+                elif combined[cond_idx] not in [1, 3] and pred == 2:
+                    combined[cond_idx] = 2
+
+        return combined
+
 
 class NegationDetector:
     """
@@ -211,66 +261,16 @@ class NegationDetector:
             r'\bnot\b',
             r'\bwithout\b',
             r'\babsent\b',
-            r'\babsence\s+of\b',
-            r'\bnegative\s+for\b',
-            r'\brule\s*out\b',
-            r'\br/o\b',
-            r'\bdenies\b',
-            r'\bdenied\b',
-            r'\bfree\s+of\b',
-            r'\bclear\s+of\b',
-            r'\bunremarkable\b',
-            r'\bnormal\b',
-
-            # Resolved/improved conditions
-            r'\bresolved\b',
-            r'\bhas\s+resolved\b',
-            r'\bcleared\b',
-            r'\bimproved\b',
-            r'\bno\s+longer\s+present\b',
-            r'\bno\s+longer\s+seen\b',
-            r'\bno\s+longer\s+visible\b',
-
-            # Excluded conditions
-            r'\bexcluded\b',
-            r'\bexcludes\b',
-            r'\brules\s+out\b',
-
-            # Comparison suggesting absence
-            r'\bwithout\s+evidence\b',
-            r'\bno\s+definite\b',
-            r'\bno\s+significant\b',
-            r'\bno\s+acute\b',
-            r'\bno\s+new\b',
         ]
 
         # Uncertainty patterns that suggest possible false positive
         self.uncertainty_patterns = [
-            r'\bpossible\b',
-            r'\bprobable\b',
-            r'\blikely\b',
             r'\bquestionable\b',
-            r'\bsuspected\b',
-            r'\bsuspicious\b',
-            r'\bcannot\s+exclude\b',
-            r'\bcannot\s+rule\s+out\b',
-            r'\bmay\s+represent\b',
-            r'\bmay\s+be\b',
-            r'\bif\s+clinical\b',
-            r'\bcorrelate\b',
         ]
 
         # Minimal/borderline patterns
         self.minimal_patterns = [
             r'\bminimal\b',
-            r'\bminor\b',
-            r'\bsubtle\b',
-            r'\btrace\b',
-            r'\btiny\b',
-            r'\bsmall\b',
-            r'\bborderline\b',
-            r'\bat\s+the\s+(?:upper|lower)\s+limit\s+of\s+normal\b',
-            r'\bwithin\s+normal\s+limits\b',
         ]
 
     def is_negated(self, text: str) -> Tuple[bool, str]:
@@ -363,49 +363,66 @@ class NegationDetector:
         }
 
 
-def extract_bboxes_with_labels(image_data: Dict, negation_detector: NegationDetector) -> List[Dict]:
+def extract_bboxes_with_labels(image_data: Dict, negation_detector: NegationDetector, label_verifier=None) -> tuple:
     """
-    Extract all bboxes from an image with their CheXpert labels and validation status.
+    Extract all findings from an image with their CheXpert labels and validation status.
 
     Args:
         image_data: The image data dictionary
         negation_detector: NegationDetector instance
+        label_verifier: Optional CheXbertLabelVerifier to predict labels per finding
 
     Returns:
-        List of bbox dictionaries with labels and validation info
+        Tuple of (bboxes list, seen_sentences set) - includes all findings
+        (abnormal or not, with or without boxes)
     """
     bboxes = []
+    seen_sentences = set()
 
     for finding in image_data.get('findings', []):
         # Skip non-abnormal findings
-        if not finding.get('abnormal', False):
+        is_abnormal = finding.get('abnormal', False)
+        if not is_abnormal:
             continue
+        
+        sentence_en = finding['sentence_en']
+        seen_sentences.add(sentence_en)
 
         # Skip findings without boxes
         boxes = finding.get('boxes', [])
         if not boxes:
             continue
-
-        # Get CheXpert labels for this finding
+        
+        # Get CheXpert labels from static mapping
         finding_labels = finding.get('labels', [])
         chexpert_cats = set()
         for label in finding_labels:
-            if label in PADCHEST_TO_CHEXPERT_MAPPING:
-                chexpert_cat = PADCHEST_TO_CHEXPERT_MAPPING[label]
-                if chexpert_cat != 'No Finding':
-                    chexpert_cats.add(chexpert_cat)
+            chexpert_cat = PADCHEST_TO_CHEXPERT_MAPPING[label] if label in PADCHEST_TO_CHEXPERT_MAPPING.keys() else ''
+            label_as_text = f"The patient has {label.lower().replace('_', ' ')}."
+            chexbert_predicted_vector = label_verifier.predict_labels([label_as_text])
+            idx_to_category = {v: k for k, v in label_verifier.category_to_idx.items()}
+            chexbert_predicted = [
+                idx_to_category[i] for i, val in enumerate(chexbert_predicted_vector)
+                if val == 1 and i in idx_to_category
+            ]
 
-        if not chexpert_cats:
-            continue
+            if chexpert_cat not in {'No Finding', ''}:
+                chexpert_cats.add(chexpert_cat)
+            for pred_cat in chexbert_predicted:
+                if pred_cat != 'No Finding' and pred_cat not in chexpert_cats:
+                    chexpert_cats.add(pred_cat)
+        if len(chexpert_cats)> 1: 
+            print('Multiple classes')
 
         # Analyze text for negation/uncertainty
-        sentence_en = finding.get('sentence_en', '')
         text_analysis = negation_detector.analyze_finding(sentence_en)
 
-        # Create single bbox entry with all boxes for this finding (keep together)
         bbox_entry = {
-            'boxes': boxes,  # Keep all boxes together as a list
+            'boxes': boxes,
+            'has_boxes': len(boxes) > 0,
+            'abnormal': is_abnormal,
             'chexpert_categories': list(chexpert_cats),
+            'chexbert_predicted_labels': chexbert_predicted,
             'padchest_labels': finding_labels,
             'sentence_en': sentence_en,
             'sentence_es': finding.get('sentence_es', ''),
@@ -418,7 +435,7 @@ def extract_bboxes_with_labels(image_data: Dict, negation_detector: NegationDete
         }
         bboxes.append(bbox_entry)
 
-    return bboxes
+    return bboxes, seen_sentences
 
 
 def organize_by_chexpert_label(
@@ -433,7 +450,7 @@ def organize_by_chexpert_label(
     """
     Organize dataset by CheXpert label with CheXbert verification.
 
-    Output format matches imagenome_annotations.json:
+    Output format for verified_samples.json (imagenome format):
     {
         "image_id": {
             "img_path": "...",
@@ -442,15 +459,26 @@ def organize_by_chexpert_label(
             "regions": [
                 {
                     "anatomy": "location",
-                    "bbox": [...],
+                    "bbox": [...],  # Single bbox (not list)
                     "findings": [...]
                 }
             ]
         }
     }
 
+    Output format for {Category}_samples.json:
+    [
+        {
+            "img_path": "...",
+            "report": "combined descriptions",
+            "labels": [...],
+            "disease_regions": [regions with this disease],
+            "co_occurrence_regions": [regions with other diseases]
+        }
+    ]
+
+    Multiple bboxes for the same disease are saved as separate regions.
     Only saves samples where CheXbert confirms the remapped label.
-    Discarded samples are saved separately for analysis.
 
     Args:
         json_path: Path to the original PadChest-GR JSON
@@ -521,11 +549,11 @@ def organize_by_chexpert_label(
     print("\nProcessing images...")
     for idx, image_data in enumerate(data):
         # Extract all bboxes with validation
-        all_bboxes = extract_bboxes_with_labels(image_data, negation_detector)
+        all_bboxes, seen_sentences = extract_bboxes_with_labels(image_data, negation_detector, label_verifier)
         stats['total_bboxes_extracted'] += len(all_bboxes)
 
         if not all_bboxes:
-            continue
+            continue 
 
         # Filter bboxes based on settings
         valid_bboxes = []
@@ -581,7 +609,6 @@ def organize_by_chexpert_label(
 
         # Track verified bboxes for this image
         verified_bboxes_for_image = []
-        verified_sentences = []
 
         # Verify each bbox and collect verified ones
         for bbox in valid_bboxes:
@@ -638,29 +665,25 @@ def organize_by_chexpert_label(
                         })
 
             # Add verified bbox to the list
+            # IMPORTANT: Create separate regions for each box
             if bbox_verified:
                 anatomy = bbox['locations'][0] if bbox['locations'] else "unspecified"
+                # Split into separate regions, one per box
+
                 verified_bboxes_for_image.append({
                     'anatomy': anatomy,
-                    'bbox': bbox['boxes'],
+                    'bbox': bbox['boxes'],  # Single box, not a list
                     'findings': bbox['padchest_labels'],
                     'chexpert_categories': verified_categories,
                     'sentence': bbox['sentence_en'],
                     'labels': labels_vector,
                 })
-                if bbox['sentence_en']:
-                    verified_sentences.append(bbox['sentence_en'])
+                
 
         # Add to verified_images if we have verified bboxes
         if verified_bboxes_for_image:
             # Combine sentences into report (deduplicate while preserving order)
-            seen_sentences = set()
-            unique_sentences = []
-            for sent in verified_sentences:
-                if sent not in seen_sentences:
-                    seen_sentences.add(sent)
-                    unique_sentences.append(sent)
-            report = ' '.join(unique_sentences)
+            report = ' '.join(seen_sentences)
 
             # Combine label vectors from all verified bboxes
             combined_labels = [0] * 14
@@ -675,27 +698,42 @@ def organize_by_chexpert_label(
                     elif combined_labels[i] not in [1, 3] and bbox_labels[i] == 2:
                         combined_labels[i] = 2
 
+            # Run CheXbert on ALL report sentences to predict labels
+            # This captures labels that the static mapping might miss
+            if verify_mappings:
+                chexbert_predicted_labels = label_verifier.predict_labels(list(seen_sentences))
+            else:
+                chexbert_predicted_labels = [0] * 14
+
             image_entry = {
                 'img_path': image_id,
                 'report': report,
                 'labels': combined_labels,
+                'chexbert_labels': chexbert_predicted_labels,
                 'regions': verified_bboxes_for_image
             }
 
             verified_images[image_id] = image_entry
 
-            # Add to per-category lists (same structure, with regions filtered by category)
+            # Add to per-category lists
+            # Separate disease_regions (with that disease) from co_occurrence_regions (other diseases)
             for category in all_categories_in_image:
-                category_regions = [
+                disease_regions = [
                     r for r in verified_bboxes_for_image
                     if category in r['chexpert_categories']
                 ]
-                if category_regions:
+                co_occurrence_regions = [
+                    r for r in verified_bboxes_for_image
+                    if category not in r['chexpert_categories']
+                ]
+
+                if disease_regions:
                     verified_samples_by_category[category].append({
                         'img_path': image_id,
                         'report': report,
                         'labels': combined_labels,
-                        'regions': category_regions
+                        'disease_regions': disease_regions,
+                        'co_occurrence_regions': co_occurrence_regions
                     })
 
         if (idx + 1) % 500 == 0:
@@ -737,9 +775,10 @@ def organize_by_chexpert_label(
         n_samples = len(samples)
         n_discarded = stats['discarded_per_category'][category]
         unique_images = len(set(s['img_path'] for s in samples))
-        total_regions = sum(len(s['regions']) for s in samples)
+        total_disease_regions = sum(len(s['disease_regions']) for s in samples)
+        total_co_occurrence_regions = sum(len(s['co_occurrence_regions']) for s in samples)
 
-        print(f"    {category}: {n_samples} images, {total_regions} regions, {n_discarded} discarded")
+        print(f"    {category}: {n_samples} images, {total_disease_regions} disease regions, {total_co_occurrence_regions} co-occurrence regions, {n_discarded} discarded")
 
     # Save overall summary
     overall_summary = {

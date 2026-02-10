@@ -566,7 +566,8 @@
                 "--device", "cuda:0",
                 "--dtype", "bfloat16",
                 "--trust-remote-code",
-                "--num-images", "40"
+                "--num-images", "40",
+                "--max-images", "80"
             ],
             "env": {
                 "HF_TOKEN": "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"
@@ -590,8 +591,7 @@
                 "--device", "cuda:0",
                 "--dtype", "bfloat16",
                 "--trust-remote-code",
-                "--num-images", "2",
-                "--max-images", "4"
+                "--num-images", "128",
             ],
             "env": {
                 "HF_TOKEN": "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"
@@ -694,6 +694,275 @@
             },
             "envFile": "${workspaceFolder}/.env"
         },
-        
+        // ============================================================
+        // EXPERIMENTS: OCO (Object Class Occlusion)
+        // ============================================================
+        {
+            "name": "Exp: MedGemma OCO100",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p100",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "40"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+                {
+            "name": "Exp: MedGemma OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p100",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+          {
+            "name": "Exp: MedGemma RO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "ro_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--dtype", "bfloat16",
+                "--num-images", "100",
+                //"--max-images", "200",
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: MAIRA-2 OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "maira-2",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: CheXagent OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "chexagent",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: CXRMateED OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "cxrmateed",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: NV-Reason-CXR OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "nv-reason-cxr-3b",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: RaDialog OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "radialog",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--dtype", "bfloat16",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: Libra OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "libra",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--max-images", "10"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: LLaVA-Rad OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "llavarad",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: ChexOne OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "chexone",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images", "10"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+
     ]
 }
