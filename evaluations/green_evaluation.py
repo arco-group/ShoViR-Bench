@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+sys.path.insert(0, "GREEN")
 from green_score import GREEN
 
 

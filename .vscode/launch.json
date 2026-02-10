@@ -1,0 +1,968 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger (modules, integrated terminal)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env",
+            "preLaunchTask": ""
+        },
+        // ============================================================
+        // BENCHMARK CLI - Full dataset inference
+        // ============================================================
+        {
+            "name": "Benchmark CLI: MedGemma (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "medgemma",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--trust-remote-code"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: MAIRA-2 (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "maira-2",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--trust-remote-code"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: CheXagent (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "chexagent",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--dtype",
+                "bfloat16",
+                "--trust-remote-code"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: CXRMateED (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "cxrmateed",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--trust-remote-code"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: NV-Reason-CXR (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "nv-reason-cxr-3b",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--dtype",
+                "float16"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: RaDialog (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "radialog",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--trust-remote-code"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: Libra (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "libra",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: LLaVA-Rad (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "llava-rad",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--trust-remote-code"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Benchmark CLI: ChexOne (PadChest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model",
+                "chexone",
+                "--data_dir",
+                "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment",
+                "padchest_baseline",
+                "--output-dir",
+                "outputs",
+                "--cache-dir",
+                ".models_cache",
+                "--device",
+                "cuda:0",
+                "--dtype",
+                "bfloat16",
+                "--trust-remote-code"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+
+        // ============================================================
+        // DEBUG - Single image model testing
+        // ============================================================
+        {
+            "name": "Debug MedGemma (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.medgemma",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "--trust-remote-code",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug MAIRA-2 (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.maira_2",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "justMyCode": false,
+            "args": [
+                "--trust-remote-code",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug Libra (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.libra",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/CXR253_IM-1045-1001.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug CXRMateED (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.cxrmateed",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "--trust-remote-code",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug CheXagent (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.chexagent",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "--dtype",
+                "bfloat16",
+                "--trust-remote-code",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug NV-Reason CXR-3B (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.nv_reason_cxr",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "justMyCode": false,
+            "args": [
+                "--dtype",
+                "float16",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug RaDialog (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.radialog",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "justMyCode": false,
+            "args": [
+                "--trust-remote-code",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug LLaVA-Rad (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.llava-rad",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "justMyCode": false,
+            "args": [
+                "--trust-remote-code",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/CXR253_IM-1045-1001.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Debug ChexOne (__main__)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.models.chexone",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "args": [
+                "--dtype",
+                "bfloat16",
+                "--trust-remote-code",
+                "--device",
+                "cuda:0",
+                "--cache-dir",
+                ".models_cache/",
+                "data/debug/21010019239437483178822378443743294784_17k27f.png"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        // ============================================================
+        // EXPERIMENTS: Baseline (whole image, no occlusion)
+        // ============================================================
+        {
+            "name": "Exp: MAIRA-2 Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "maira-2",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--num-images", "6"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: MedGemma Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--num-images","2"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: Libra Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "libra",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--num-images", "24"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: CheXagent Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "chexagent",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--num-images", "40",
+                "--max-images", "80"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: CXRMateED Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "cxrmateed",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--num-images", "128",
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: NV-Reason-CXR Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "nv-reason-cxr-3b",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--num-images", "128"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: RaDialog Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "radialog",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--dtype", "bfloat16",
+                "--num-images", "32",
+                "--max-images", "64"
+            ],
+            "justMyCode": true,
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: LLaVA-Rad Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "llavarad",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--num-images", "24"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: ChexOne Baseline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "chexone",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "baseline",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--num-images", "8"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        // ============================================================
+        // EXPERIMENTS: OCO (Object Class Occlusion)
+        // ============================================================
+        {
+            "name": "Exp: MedGemma OCO100",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p100",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "40"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+                {
+            "name": "Exp: MedGemma OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p100",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+          {
+            "name": "Exp: MedGemma RO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "medgemma",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "ro_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--dtype", "bfloat16",
+                "--num-images", "100",
+                //"--max-images", "200",
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: MAIRA-2 OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "maira-2",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: CheXagent OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "chexagent",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: CXRMateED OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "cxrmateed",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: NV-Reason-CXR OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "nv-reason-cxr-3b",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: RaDialog OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "radialog",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--dtype", "bfloat16",
+                "--max-images", "10",
+                "--num-images", "5"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: Libra OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "libra",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--max-images", "10"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: LLaVA-Rad OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "llavarad",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--trust-remote-code",
+                "--max-images", "10"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Exp: ChexOne OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "chexone",
+                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images", "10"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+
+    ]
+}

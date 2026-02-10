@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Mapping, Tuple
+from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple
+
+import numpy as np
 
 from PIL import Image
-from tqdm import tqdm 
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 from .config import BenchmarkConfig
 from .models import MODEL_CLASSES, MODEL_SPECS
 from .prompts import PROMPTS
@@ -37,17 +43,32 @@ def _resolve_prompt(config: BenchmarkConfig) -> tuple[str, str]:
     return prompt_key, PROMPTS[prompt_key]
 
 
-def _batch_samples(
-    dataset: Mapping[str, Mapping[str, Any]],
-    batch_size: int,
-) -> Iterator[List[Tuple[str, Mapping[str, Any]]]]:
-    """Yield batches of (sample_id, sample) tuples."""
-    items = iter(dataset.items())
-    while True:
-        batch = list(islice(items, batch_size))
-        if not batch:
-            break
-        yield batch
+class _CachedDataset(Dataset):
+    """Disk-cached dataset: preprocessed images stored as .npy on disk, metadata in RAM."""
+
+    def __init__(self, cache_dir: str, file_indices: List[int], metadata: List[Tuple[str, str, list, str]]):
+        self._cache_dir = cache_dir
+        self._file_indices = file_indices
+        self._meta = metadata
+
+    def __len__(self) -> int:
+        return len(self._meta)
+
+    def __getitem__(self, idx: int) -> Tuple[Image.Image, str, str, list, str]:
+        arr = np.load(os.path.join(self._cache_dir, f"{self._file_indices[idx]}.npy"))
+        image = Image.fromarray(arr)
+        path, report, labels, category = self._meta[idx]
+        return image, path, report, labels, category
+
+
+def _collate_pil(batch: List[Tuple[Image.Image, str, str, list, str]]) -> Tuple[List[Image.Image], List[str], List[str], List[list], List[str]]:
+    """Collate that keeps PIL images as-is (no tensor conversion)."""
+    images = [item[0] for item in batch]
+    paths = [item[1] for item in batch]
+    reports = [item[2] for item in batch]
+    labels = [item[3] for item in batch]
+    categories = [item[4] for item in batch]
+    return images, paths, reports, labels, categories
 
 
 def run_inference(
@@ -68,90 +89,79 @@ def run_inference(
     Returns:
         List of result dictionaries with predictions and references
     """
+
+
+
+    
     _prompt_key, prompt_text = _resolve_prompt(config)
     preprocess_fn = _resolve_preprocess(config.experiment)
     model = _build_model_instance(config)
     results: list[dict[str, Any]] = []
-    processed = 0
 
     num_images = config.num_images
     total_samples = len(dataset)
 
-    if num_images == 1:
-        # Single image mode
-        for _sample_id, sample in tqdm(dataset.items(), total=total_samples, desc="Inference"):
+    with tempfile.TemporaryDirectory(prefix="benchmark_cache_") as cache_dir:
+
+        # ── Phase 1: preprocess & cache to disk (multi-threaded) ──
+        def _preprocess_and_cache(idx_sample: Tuple[int, Tuple[str, Mapping[str, Any]]]) -> Optional[Tuple[int, str, str, list, str]]:
+            idx, (_sid, sample) = idx_sample
             rel_img_path = sample.get("img_path")
             if not rel_img_path:
-                continue
-
+                return None
             sample_with_ctx = dict(sample)
             sample_with_ctx["data_dir"] = str(config.data_dir)
-
             try:
                 image = preprocess_fn(sample_with_ctx)
             except Exception:
-                continue
+                return None
+            np.save(os.path.join(cache_dir, f"{idx}.npy"), np.asarray(image, dtype=np.uint8))
+            return (idx, str(rel_img_path), sample.get("report", ""), sample.get("labels", []), sample.get("target_category", ""))
 
-            output = model(image, prompt_text)
-            predictions = _extract_text(output)
-            references = sample.get("report", "")
-            labels = sample.get("labels", [])
+        max_items = config.max_images if config.max_images is not None else total_samples
+        items_to_load = list(islice(enumerate(dataset.items()), max_items))
+        load_workers = min(os.cpu_count() or 4, 8)
 
-            results.append({
-                "image_path": str(rel_img_path),
-                "predictions": predictions,
-                "references": references,
-                "labels": labels,
-            })
+        entries: List[Tuple[int, str, str, list, str]] = []
+        with ThreadPoolExecutor(max_workers=load_workers) as pool:
+            futures = {pool.submit(_preprocess_and_cache, item): item for item in items_to_load}
+            for future in tqdm(as_completed(futures), total=len(futures), desc=f"Preprocessing ({load_workers} workers)"):
+                result = future.result()
+                if result is not None:
+                    entries.append(result)
 
-            processed += 1
-            if config.max_images is not None and processed >= config.max_images:
-                break
-    else:
-        # Multi-image mode: batch N independent conversations into
-        # a single model.generate() call for GPU efficiency.
-        # Each image gets its own conversation with the same prompt.
-        total_batches = (total_samples + num_images - 1) // num_images
-        for batch in tqdm(_batch_samples(dataset, num_images), total=total_batches, desc=f"Inference (batch={num_images})"):
-            images: List[Image.Image] = []
-            image_paths: List[str] = []
-            references_list: List[str] = []
-            labels_list: List[List[int]] = []
+        # Sort by original dataset order
+        entries.sort(key=lambda x: x[0])
+        file_indices = [e[0] for e in entries]
+        metadata = [(e[1], e[2], e[3], e[4]) for e in entries]
 
-            for _sample_id, sample in batch:
-                rel_img_path = sample.get("img_path")
-                if not rel_img_path:
-                    continue
+        total_loaded = len(metadata)
 
-                sample_with_ctx = dict(sample)
-                sample_with_ctx["data_dir"] = str(config.data_dir)
+        # ── Phase 2: inference via DataLoader (reads from disk cache) ──
+        ds = _CachedDataset(cache_dir, file_indices, metadata)
+        dl_workers = min(4, load_workers)
+        loader = DataLoader(
+            ds,
+            batch_size=num_images,
+            shuffle=False,
+            num_workers=dl_workers,
+            prefetch_factor=2,
+            collate_fn=_collate_pil,
+        )
 
-                try:
-                    image = preprocess_fn(sample_with_ctx)
-                    images.append(image)
-                    image_paths.append(str(rel_img_path))
-                    references_list.append(sample.get("report", ""))
-                    labels_list.append(sample.get("labels", []))
-                except Exception:
-                    continue
-
-            if not images:
-                continue
-
-            # Single generate() call with N independent conversations
+        for images, image_paths, references_list, labels_list, categories_list in tqdm(loader, desc=f"Inference (batch={num_images})"):
             outputs = model(images, prompt_text)
             predictions_list = [_extract_text(o) for o in outputs]
 
-            results.append({
+            result = {
                 "image_paths": image_paths,
                 "predictions": predictions_list,
                 "references": references_list,
-                "labels": labels_list
-            })
-
-            processed += len(images)
-            if config.max_images is not None and processed >= config.max_images:
-                break
+                "labels": labels_list,
+            }
+            if any(categories_list):
+                result["target_categories"] = categories_list
+            results.append(result)
 
     return results
 
@@ -196,12 +206,13 @@ def flatten_results(results: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         # Copy any extra metadata into every per-image item
         shared = {
             k: v for k, v in r.items()
-            if k not in {"image_paths", "predictions", "references", "labels"}
+            if k not in {"image_paths", "predictions", "references", "labels", "target_categories"}
         }
 
         preds = r.get("predictions", None)
         refs = r.get("references", None)
         labs = r.get("labels", None)
+        cats = r.get("target_categories", None)
 
         for i in range(n):
             item = dict(shared)
@@ -211,6 +222,9 @@ def flatten_results(results: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             item["prediction"] = _broadcast_get(preds, i, n)
             item["reference"] = _broadcast_get(refs, i, n)
             item["label"] = _broadcast_get(labs, i, n)
+            cat = _broadcast_get(cats, i, n)
+            if cat:
+                item["target_category"] = cat
 
             flat.append(item)
 

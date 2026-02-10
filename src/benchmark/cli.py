@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse
 import json
+import random
 import re
 from pathlib import Path
 import numpy as np
@@ -84,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable progress bar",
     )
     parser.add_argument(
-        "--filter-labels",
+        "--filter-labels", 
         nargs="+",
         default=None,
         help="Filter dataset to only include samples with these CheXpert labels.",
@@ -137,11 +138,81 @@ def _extract_dataset_name(data_path: str) -> str:
     except StopIteration:
         return Path(data_path).parent.name
 
-def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str, dataset: str) -> Path:
+def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_key: str, dataset: str, seed: int) -> Path:
     model_id_seg = _safe_path_segment(model_id)
     prompt_key_seg = _safe_path_segment(prompt_key)
-    filename = f"{model_id_seg}_{prompt_key_seg}.json"
+    filename = f"{model_id_seg}_{prompt_key_seg}::seed={seed}.json"
+
+    # For OCO/ROCO experiments, split into experiment_type/percentage format
+    # e.g., "oco_p50" -> "oco/p50"
+    if experiment.startswith("oco_") or experiment.startswith("roco_") or experiment.startswith("ro_") :
+        exp_parts = experiment.split("_", 1)  # Split into ["oco", "p50"] or ["roco", "p75"]
+        if len(exp_parts) == 2:
+            return Path(output_dir) / exp_parts[0] / exp_parts[1] / dataset / filename
+
     return Path(output_dir) / experiment / dataset / filename
+
+
+def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_name: str, experiment: str) -> dict:
+    """
+    Resolve and load the dataset based on experiment type and dataset name.
+
+    For padchest-gr dataset with OCO/ROCO experiments, loads all chexpert class files
+    excluding categories with less than 50 images. For baseline experiments or other
+    datasets, loads the provided data_json file as usual.
+
+    Args:
+        data_json_path: Path to the main data JSON file
+        data_dir: Path to the data directory
+        dataset_name: Name of the dataset (e.g., 'padchest-gr')
+        experiment: Experiment type (e.g., 'baseline', 'oco_p50', 'roco_p75')
+
+    Returns:
+        Dictionary mapping sample_id to sample data
+    """
+    if dataset_name == "padchest-gr" and (experiment.startswith("oco") or experiment.startswith("ro")):
+        # For OCO/ROCO experiments with padchest-gr, load all chexpert class files
+        # excluding categories with less than 50 images
+        # Navigate up to padchest-gr level: data_dir is .../BIMCV-Padchest-GR /PadChest_GR_images
+        # So we need to go up two levels to reach data/padchest-gr
+        chexpert_dir = data_dir.parent.parent / "chexpert-by-label"
+
+        # Categories with >= 50 images (based on summary.json verified_per_category)
+        valid_categories = [
+            "Atelectasis",
+            "Cardiomegaly",
+            "Fracture",
+            "Lung_Lesion",
+            "Lung_Opacity",
+            "Pleural_Effusion",
+            "Pleural_Other",
+            "Support_Devices",
+        ]
+
+        dataset = {}
+        for category in valid_categories:
+            category_file = chexpert_dir / f"{category}_samples.json"
+            if category_file.exists():
+                with category_file.open("r", encoding="utf-8") as f:
+                    category_data = json.load(f)
+                    if isinstance(category_data, list):
+                        for sample in category_data:
+                            composite_key = f"{sample['img_path']}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
+                    else:
+                        for key, sample in category_data.items():
+                            composite_key = f"{key}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
+    else:
+        # For baseline or other datasets, use the provided data_json file as usual
+        with Path(data_json_path).open("r", encoding="utf-8") as f:
+            dataset = json.load(f)
+
+    return dataset
 
 
 
@@ -161,9 +232,9 @@ def main() -> int:
     output_path = (
         Path(args.output)
         if args.output is not None
-        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name)
+        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name, args.seed)
     )
-
+    print('remote code: ', args.trust_remote_code)
     config = BenchmarkConfig(
         model_key=args.model,
         data_dir=Path(args.data),
@@ -180,8 +251,12 @@ def main() -> int:
         num_images=args.num_images,
     )
 
-    with Path(args.data_json).open("r", encoding="utf-8") as f:
-        dataset = json.load(f)
+    # Set random seed for reproducible bbox selection
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
+    # Resolve and load dataset based on experiment type and dataset name
+    dataset = _resolve_experiment_dataset(args.data_json, config.data_dir, dataset_name, args.experiment)
 
     results = run_inference(config, dataset)
     write_json(config.output_path, results)
