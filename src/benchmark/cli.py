@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable progress bar",
     )
     parser.add_argument(
-        "--filter-labels",
+        "--filter-labels", 
         nargs="+",
         default=None,
         help="Filter dataset to only include samples with these CheXpert labels.",
@@ -229,7 +229,7 @@ def main() -> int:
         if args.output is not None
         else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name, args.seed)
     )
-
+    print('remote code: ', args.trust_remote_code)
     config = BenchmarkConfig(
         model_key=args.model,
         data_dir=Path(args.data),
