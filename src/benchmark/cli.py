@@ -3,6 +3,8 @@ import argparse
 import json
 import re
 from pathlib import Path
+import numpy as np
+import random
 from .config import BenchmarkConfig, ExperimentType
 from .hf_runner import run_inference, write_json
 from .io import iter_images, list_images
@@ -94,6 +96,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of images per inference call (1 = single image, >1 = multi-image). Default: 1.",
     )
 
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=3,
+        help="Random seed for reproducible bbox selection in OCO/ROCO experiments. Default: 3.",
+    )
+
     return parser
 
 
@@ -141,6 +150,10 @@ def main() -> int:
     args = parser.parse_args()
     spec = MODEL_SPECS[args.model]
     prompt_key = args.prompt_key or spec.prompt_key
+
+    # Set random seed for reproducible bbox selection
+    np.random.seed(args.seed)
+    random.seed(args.seed)
 
     # Extract dataset name from data path
     dataset_name = _extract_dataset_name(args.data)

@@ -17,6 +17,7 @@ rrg_experiment.bash
 nv_experiment.bash
 chexagent_experiment.bash
 radialog_experiment.bash
+evaluation_metrics.bash
 job_*
 out_*
 /logs
@@ -25,3 +26,4 @@ results/
 .venv_chexagent/
 .radialog_venv/
 evaluations/results
+evaluations/concat_results.py
