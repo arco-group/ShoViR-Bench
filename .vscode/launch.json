@@ -706,15 +706,15 @@
             "console": "integratedTerminal",
             "args": [
                 "--model", "medgemma",
-                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
-                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json",
+                "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files",
                 "--experiment", "oco_p100",
                 "--output-dir", "outputs",
                 "--cache-dir", ".models_cache",
                 "--device", "cuda:0",
                 "--trust-remote-code",
                 "--max-images", "10",
-                "--num-images", "40"
+                "--num-images", "5"
             ],
             "env": {
                 "HF_TOKEN": "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"
@@ -828,16 +828,16 @@
             "console": "integratedTerminal",
             "args": [
                 "--model", "cxrmateed",
-                "--data-json", "data/padchest-gr/chexpert-by-label/verified_samples.json",
-                "--data", "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
+                "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json",
+                "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files",
                 "--experiment", "oco_p50",
                 "--output-dir", "outputs",
                 "--cache-dir", ".models_cache",
                 "--device", "cuda:0",
                 "--dtype", "bfloat16",
                 "--trust-remote-code",
-                "--max-images", "10",
-                "--num-images", "5"
+                "--max-images", "500",
+                "--num-images", "64"
             ],
             "env": {
                 "HF_TOKEN": "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"

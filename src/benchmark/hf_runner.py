@@ -120,7 +120,7 @@ def run_inference(
 
         max_items = config.max_images if config.max_images is not None else total_samples
         items_to_load = list(islice(enumerate(dataset.items()), max_items))
-        load_workers = min(os.cpu_count() or 4, 8)
+        load_workers = min(os.cpu_count() or 4, 16)
 
         entries: List[Tuple[int, str, str, list, str]] = []
         with ThreadPoolExecutor(max_workers=load_workers) as pool:
