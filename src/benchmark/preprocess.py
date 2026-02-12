@@ -107,21 +107,22 @@ def _pick_random_region_bbox(sample: Sample, w: int, h: int) -> tuple[int, int, 
     return valid[idx]
 
 
-def _collect_all_region_bboxes(sample: Sample, w: int, h: int) -> list[tuple[int, int, int, int]]:
+def _collect_all_region_bboxes(sample: Sample, w: int, h: int, exp: str) -> list[tuple[int, int, int, int]]:
     """Collect ALL valid bboxes from sample['regions'] (clipped to image bounds)."""
-    regions = sample.get("regions") or []
+    exp_to_bbox_regions = {"doco": "co_occurrence_regions", "oco": "disease_regions"}
+    regions = sample.get(exp_to_bbox_regions[exp]) or []
     if not isinstance(regions, list) or len(regions) == 0:
         return []
-
     valid: list[tuple[int, int, int, int]] = []
     for r in regions:
         if not isinstance(r, dict):
-            continue
+            raise Exception
         bbox = r.get("bbox")
-        if isinstance(bbox, list) and len(bbox) == 4:
-            clipped = _clip_bbox(bbox, w, h)
-            if clipped is not None:
-                valid.append(clipped)
+        if isinstance(bbox, list):
+            for box in bbox: 
+                clipped = _clip_bbox(box, w, h)
+                if clipped is not None:
+                    valid.append(clipped)
     return valid
 
 
@@ -274,7 +275,7 @@ def _generate_random_bbox(w: int, h: int) -> tuple[int, int, int, int]:
 
     return x1, y1, x2, y2
 
-def object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
+def object_class_occlusion(sample: Sample, *, p: float, exp: str) -> Image.Image:
     """
     Apply matched correlated noise to ALL annotated bboxes in sample['regions'].
 
@@ -287,7 +288,7 @@ def object_class_occlusion(sample: Sample, *, p: float) -> Image.Image:
     if p <= 0.0:
         return image
 
-    bboxes = _collect_all_region_bboxes(sample, w=w, h=h)
+    bboxes = _collect_all_region_bboxes(sample, w=w, h=h, exp=exp)
     if not bboxes:
         return image
 
@@ -481,7 +482,7 @@ def _resolve_preprocess(experiment: str) -> PreprocessFn:
     if parsed is not None:
         base, p = parsed
         if base in ("oco", "doco"):
-            return lambda sample: object_class_occlusion(sample, p=p)
+            return lambda sample: object_class_occlusion(sample, p=p, exp=base)
         if base == "roco":
             return lambda sample: random_object_class_occlusion(sample, p=p)
         if base == "ro":
