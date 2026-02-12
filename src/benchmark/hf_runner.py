@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing as mp
 from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple
@@ -17,6 +17,38 @@ from .config import BenchmarkConfig
 from .models import MODEL_CLASSES, MODEL_SPECS
 from .prompts import PROMPTS
 from .preprocess import _resolve_preprocess
+
+
+# ── Multiprocessing worker state (module-level for pickling) ──────────
+_mp_preprocess_fn = None
+_mp_cache_dir = None
+_mp_base_seed = 0
+
+
+def _init_mp_worker(experiment: str, cache_dir: str, base_seed: int) -> None:
+    """Pool initializer: resolve preprocess fn once per worker process."""
+    global _mp_preprocess_fn, _mp_cache_dir, _mp_base_seed
+    _mp_preprocess_fn = _resolve_preprocess(experiment)
+    _mp_cache_dir = cache_dir
+    _mp_base_seed = base_seed
+
+
+def _mp_preprocess_one(args: tuple) -> Optional[Tuple[int, str, str, list, str]]:
+    """Preprocess a single sample in a worker process."""
+    idx, sample, data_dir = args
+    # Deterministic per-sample seed (reproducible regardless of worker order)
+    np.random.seed((_mp_base_seed + idx) % (2**32))
+
+    rel_img_path = sample.get("img_path")
+    if not rel_img_path:
+        return None
+    sample["data_dir"] = data_dir
+    try:
+        image = _mp_preprocess_fn(sample)
+    except Exception:
+        return None
+    np.save(os.path.join(_mp_cache_dir, f"{idx}.npy"), np.asarray(image, dtype=np.uint8))
+    return (idx, str(rel_img_path), sample.get("report", ""), sample.get("labels", []), sample.get("target_category", ""))
 
 
 def _build_model_instance(config: BenchmarkConfig):
@@ -94,7 +126,6 @@ def run_inference(
 
     
     _prompt_key, prompt_text = _resolve_prompt(config)
-    preprocess_fn = _resolve_preprocess(config.experiment)
     model = _build_model_instance(config)
     results: list[dict[str, Any]] = []
 
@@ -103,30 +134,37 @@ def run_inference(
 
     with tempfile.TemporaryDirectory(prefix="benchmark_cache_") as cache_dir:
 
-        # ── Phase 1: preprocess & cache to disk (multi-threaded) ──
-        def _preprocess_and_cache(idx_sample: Tuple[int, Tuple[str, Mapping[str, Any]]]) -> Optional[Tuple[int, str, str, list, str]]:
-            idx, (_sid, sample) = idx_sample
-            rel_img_path = sample.get("img_path")
-            if not rel_img_path:
-                return None
-            sample_with_ctx = dict(sample)
-            sample_with_ctx["data_dir"] = str(config.data_dir)
-            try:
-                image = preprocess_fn(sample_with_ctx)
-            except Exception:
-                return None
-            np.save(os.path.join(cache_dir, f"{idx}.npy"), np.asarray(image, dtype=np.uint8))
-            return (idx, str(rel_img_path), sample.get("report", ""), sample.get("labels", []), sample.get("target_category", ""))
-
+        # ── Phase 1: preprocess & cache to disk (multiprocessing) ──
         max_items = config.max_images if config.max_images is not None else total_samples
         items_to_load = list(islice(enumerate(dataset.items()), max_items))
+
+        # Build work items: (idx, sample_dict_copy, data_dir_str)
+        work_items = [
+            (idx, dict(sample), str(config.data_dir))
+            for idx, (_sid, sample) in items_to_load
+        ]
+
         load_workers = min(os.cpu_count() or 4, 16)
+        chunksize = max(1, len(work_items) // (load_workers * 4))
+
+        # forkserver is safe when CUDA is already initialised in the parent;
+        # workers are forked from a pristine server process (no CUDA context).
+        try:
+            mp_ctx = mp.get_context("forkserver")
+        except ValueError:
+            mp_ctx = mp.get_context("spawn")
 
         entries: List[Tuple[int, str, str, list, str]] = []
-        with ThreadPoolExecutor(max_workers=load_workers) as pool:
-            futures = {pool.submit(_preprocess_and_cache, item): item for item in items_to_load}
-            for future in tqdm(as_completed(futures), total=len(futures), desc=f"Preprocessing ({load_workers} workers)"):
-                result = future.result()
+        with mp_ctx.Pool(
+            processes=load_workers,
+            initializer=_init_mp_worker,
+            initargs=(config.experiment, cache_dir, config.seed),
+        ) as pool:
+            for result in tqdm(
+                pool.imap_unordered(_mp_preprocess_one, work_items, chunksize=chunksize),
+                total=len(work_items),
+                desc=f"Preprocessing ({load_workers} processes)",
+            ):
                 if result is not None:
                     entries.append(result)
 

@@ -110,7 +110,7 @@ def _pick_random_region_bbox(sample: Sample, w: int, h: int) -> tuple[int, int, 
 def _collect_all_region_bboxes(sample: Sample, w: int, h: int, exp: str) -> list[tuple[int, int, int, int]]:
     """Collect ALL valid bboxes from sample['regions'] (clipped to image bounds)."""
     exp_to_bbox_regions = {"doco": "co_occurrence_regions", "oco": "disease_regions"}
-    regions = sample.get(exp_to_bbox_regions[exp]) or []
+    regions = sample.get(exp_to_bbox_regions[exp]) or sample.get('regions') or False
     if not isinstance(regions, list) or len(regions) == 0:
         return []
     valid: list[tuple[int, int, int, int]] = []
@@ -118,6 +118,7 @@ def _collect_all_region_bboxes(sample: Sample, w: int, h: int, exp: str) -> list
         if not isinstance(r, dict):
             raise Exception
         bbox = r.get("bbox")
+        bbox = bbox if isinstance(bbox[0], list) else [bbox]
         if isinstance(bbox, list):
             for box in bbox: 
                 clipped = _clip_bbox(box, w, h)
