@@ -5,6 +5,31 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "MIMIC: CXRMateED OCO50",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "cxrmateed",
+                "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json",
+                "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files",
+                "--experiment", "oco_p50",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images", "500",
+                "--num-images", "64"
+            ],
+            "env": {
+                "HF_TOKEN": "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"
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",
@@ -286,7 +311,7 @@
                 "--cache-dir", ".models_cache",
                 "--device", "cuda:0",
                 "--trust-remote-code",
-                "--max-images", "10",
+                "--max-images", "500",
                 "--num-images", "5"
             ],
             "env": {
