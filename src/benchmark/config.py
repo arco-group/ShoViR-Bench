@@ -36,6 +36,7 @@ class BenchmarkConfig:
     occlusion_strength: float = 1.0  # p value for OCO/ROCO (0.0 to 1.0)
     filter_labels: Optional[List[str]] = None  # Filter dataset by CheXpert labels
     num_images: int = 1  # Number of images per inference (1 = single, >1 = multi-image)
+    seed: int = 3  # Random seed for reproducible preprocessing (OCO/ROCO/DOCO)
 
     @property
     def experiment_type(self) -> ExperimentType:

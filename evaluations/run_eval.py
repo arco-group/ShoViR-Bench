@@ -450,6 +450,25 @@ def compute_green_metric(
 # -----------------------------
 # Main runner
 # -----------------------------
+def _results_exist(filepath: str, output_mode: str) -> bool:
+    """Check whether results already exist for this file/model."""
+    model_name = Path(filepath).with_suffix("").name
+
+    if output_mode == "per-experiment":
+        csv_path = derive_experiment_dataset_results_csv(filepath)
+        if csv_path.exists():
+            df = pd.read_csv(csv_path, index_col=0)
+            if model_name in df.index:
+                return True
+    elif output_mode == "per-file":
+        out_paths = derive_per_file_output_paths(filepath)
+        if out_paths["main"].exists():
+
+            return True
+    print("not-found")
+    return False
+
+
 def run(
     filepath: str,
     scorers: Optional[List[str]] = None,
@@ -460,7 +479,14 @@ def run(
     output_mode: str = "per-file",  # "per-file" or "per-experiment"
     compute_green: bool = False,
     green_model_name: str = "StanfordAIMI/GREEN-radllama2-7b",
+    skip_existing: bool = False,
 ) -> None:
+    # Skip if results already exist and --skip-existing is set
+    if skip_existing and _results_exist(filepath, output_mode):
+        model_name = Path(filepath).with_suffix("").name
+        print(f"[SKIP] Results already exist for '{model_name}' ({output_mode}). Use without --skip-existing to override.")
+        return
+
     # Load JSON list of samples
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -617,6 +643,14 @@ def parse_args() -> argparse.Namespace:
         help="Output mode: 'per-file' saves one CSV per JSON; 'per-experiment' appends a row to results/<experiment>/<dataset>/results.csv.",
     )
 
+    # Override control
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip evaluation if results already exist for this model/file. "
+             "Without this flag, existing results are overwritten (default behaviour).",
+    )
+
     # GREEN options
     parser.add_argument(
         "--compute-green",
@@ -647,5 +681,6 @@ if __name__ == "__main__":
         output_mode=args.output_mode,
         compute_green=args.compute_green,
         green_model_name=args.green_model_name,
+        skip_existing=args.skip_existing,
     )
 
