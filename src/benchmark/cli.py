@@ -17,11 +17,12 @@ EXPERIMENT_HELP = """
 Experiment types:
   baseline     - No occlusion, process whole image as-is
   oco_pXX      - Object Class Occlusion at XX%% strength (uses annotated bboxes)
+  doco_pXX     - Drop Object Class Occlusion at XX%% strength (like OCO, drops samples without bboxes)
   roco_pXX     - Random Object Class Occlusion at XX%% strength (random bboxes)
   all_noise    - Replace entire image with random noise
   all_noise_mean - Replace entire image with matched correlated noise
 
-Examples: baseline, oco_p50, oco_p100, roco_p25, roco_p75
+Examples: baseline, oco_p50, doco_p100, roco_p25, roco_p75
 """
 
 
@@ -57,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Experiment name for preprocessing. "
             f"Static: {static_experiments}. "
-            "Parametric: oco_pXX, roco_pXX (XX in 0..100)."
+            "Parametric: oco_pXX, doco_pXX, roco_pXX (XX in 0..100)."
         ),
     )
 
@@ -145,12 +146,30 @@ def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_k
 
     # For OCO/ROCO experiments, split into experiment_type/percentage format
     # e.g., "oco_p50" -> "oco/p50"
-    if experiment.startswith("oco_") or experiment.startswith("roco_") or experiment.startswith("ro_") :
+    if experiment.startswith(("oco_", "doco_", "roco_", "ro_")):
         exp_parts = experiment.split("_", 1)  # Split into ["oco", "p50"] or ["roco", "p75"]
         if len(exp_parts) == 2:
             return Path(output_dir) / exp_parts[0] / exp_parts[1] / dataset / filename
 
     return Path(output_dir) / experiment / dataset / filename
+
+
+def _sample_has_bboxes(sample: dict) -> bool:
+    """Return True if the sample has at least one non-empty bbox in its regions."""
+    for key in ("disease_regions", "co_occurrence_regions"):
+        regions = sample.get(key)
+        if not isinstance(regions, list):
+            continue
+        elif len(regions) == 0: 
+            return False
+        else: 
+            for region in regions:
+                if not isinstance(region, dict):
+                    continue
+                bbox = region.get("bbox")
+                if not (isinstance(bbox, list) and len(bbox) > 0):
+                    return False
+    return True
 
 
 def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_name: str, experiment: str) -> dict:
@@ -170,7 +189,7 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
     Returns:
         Dictionary mapping sample_id to sample data
     """
-    if dataset_name == "padchest-gr" and (experiment.startswith("oco") or experiment.startswith("ro")):
+    if dataset_name == "padchest-gr" and (experiment.startswith(("oco", "doco", "ro"))):
         # For OCO/ROCO experiments with padchest-gr, load all chexpert class files
         # excluding categories with less than 50 images
         # Navigate up to padchest-gr level: data_dir is .../BIMCV-Padchest-GR /PadChest_GR_images
@@ -211,6 +230,13 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
         # For baseline or other datasets, use the provided data_json file as usual
         with Path(data_json_path).open("r", encoding="utf-8") as f:
             dataset = json.load(f)
+
+    # DOCO: drop samples that don't have any valid bboxes
+    if experiment.startswith("doco"):
+        before = len(dataset)
+        dataset = {k: v for k, v in dataset.items() if _sample_has_bboxes(v)}
+        after = len(dataset)
+        print(f"[DOCO] Dropped {before - after}/{before} samples without other diseas bboxes ({after} remaining)")
 
     return dataset
 

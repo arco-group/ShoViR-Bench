@@ -446,12 +446,13 @@ def _parse_experiment_with_p(experiment: str) -> tuple[str, float] | None:
     """
     Parse experiment strings:
       - 'oco_pXX'  : Object Class Occlusion (ALL annotated bboxes)
+      - 'doco_pXX' : Drop Object Class Occlusion (like OCO, but samples without bboxes are dropped)
       - 'roco_pXX' : Random Object Class Occlusion (ONE random annotated bbox)
       - 'ro_pXX'   : Random Occlusion (ONE random unannotated bbox)
 
     Returns (base_name, p_value) or None if no match.
     """
-    m = re.fullmatch(r"(ro|oco|roco)_p(\d{1,3})", experiment, re.IGNORECASE)
+    m = re.fullmatch(r"(ro|oco|roco|doco)_p(\d{1,3})", experiment, re.IGNORECASE)
     if not m:
         return None
 
@@ -469,6 +470,7 @@ def _resolve_preprocess(experiment: str) -> PreprocessFn:
       - all_noise
       - all_noise_mean
       - oco_pXX  : occlude ALL annotated bboxes
+      - doco_pXX : occlude ALL annotated bboxes (samples without bboxes are dropped upstream)
       - roco_pXX : occlude ONE random annotated bbox
       - ro_pXX   : occlude ONE random unannotated bbox
     """
@@ -478,7 +480,7 @@ def _resolve_preprocess(experiment: str) -> PreprocessFn:
     parsed = _parse_experiment_with_p(experiment)
     if parsed is not None:
         base, p = parsed
-        if base == "oco":
+        if base in ("oco", "doco"):
             return lambda sample: object_class_occlusion(sample, p=p)
         if base == "roco":
             return lambda sample: random_object_class_occlusion(sample, p=p)
