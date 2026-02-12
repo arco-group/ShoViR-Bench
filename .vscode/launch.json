@@ -964,5 +964,16 @@
             "envFile": "${workspaceFolder}/.env"
         },
 
+        // ============================================================
+        // EVALUATION: Run all evals (bash)
+        // ============================================================
+        {
+            "name": "Run All Evals (skip existing)",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "bash scripts/run_all_evals.sh --skip-existing --output-mode per-experiment --save-breakdowns",
+            "cwd": "${workspaceFolder}"
+        }
+
     ]
 }
