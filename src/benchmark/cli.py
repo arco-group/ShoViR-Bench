@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import random
 import re
 from pathlib import Path
 import numpy as np
@@ -211,6 +212,44 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
         dataset = {}
         for category in valid_categories:
             category_file = chexpert_dir / f"{category}_samples.json"
+            if category_file.exists():
+                with category_file.open("r", encoding="utf-8") as f:
+                    category_data = json.load(f)
+                    if isinstance(category_data, list):
+                        for sample in category_data:
+                            composite_key = f"{sample['img_path']}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
+                    else:
+                        for key, sample in category_data.items():
+                            composite_key = f"{key}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
+
+    elif dataset_name == "mimic-cxr-jpg" and (experiment.startswith("oco") or experiment.startswith("ro")):
+        chexpert_dir = Path(data_json_path).parent / "classes_jsons"
+
+        valid_categories = [
+            "Atelectasis",
+            "Cardiomegaly",
+            "Consolidation",
+            "Edema",
+            "Enlarged_Cardiomediastinum",
+            "Fracture",
+            "Lung_Lesion",
+            "Lung_Opacity",
+            "Pleural_Effusion",
+            "Pleural_Other",
+            "Pneumonia",
+            "Pneumothorax"
+            "Support_Devices",
+        ]
+
+        dataset = {}
+        for category in valid_categories:
+            category_file = chexpert_dir / f"{category}.json"
             if category_file.exists():
                 with category_file.open("r", encoding="utf-8") as f:
                     category_data = json.load(f)
