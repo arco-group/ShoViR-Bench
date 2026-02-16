@@ -1,41 +1,4 @@
-# run_eval_chexbert_class.py
-"""
-Radiology report generation evaluation script (CheXbert single-class only).
-
-It loads a JSON file containing model predictions and references, computes ONLY the
-CheXbert F1 for a SINGLE specified condition, and saves the results.
-
-Two output modes (selectable via CLI flag):
-1) Per-file CSV (legacy mode):
-   - If the input path contains 'outputs', replace it with 'results' and keep the subpath
-     after 'outputs', changing extension to .csv.
-   - Example:
-       .../outputs/baseline/mimic-cxr-jpg/foo.json
-       -> results/baseline/mimic-cxr-jpg/foo.csv
-
-2) Per-experiment+dataset CSV (aggregated mode):
-   - Create/update one CSV file per (experiment, dataset), where:
-       experiment = folder right after 'outputs'
-       dataset    = folder right after experiment
-   - Example:
-       .../outputs/baseline/mimic-cxr-jpg/foo.json
-       -> results/baseline/mimic-cxr-jpg/results.csv
-     Each model/run becomes a row. The row index is the JSON filename stem (e.g., "foo").
-
-Bootstrap:
-- If --bootstrap-ci is enabled, the script adds median/ci_l/ci_h for the F1 (bootstrap percentile 95%).
-- If --bootstrap-ci is disabled, it saves a single scalar score.
-
-Expected JSON format:
-[
-  {"prediction": "...", "reference": "..."},
-  ...
-]
-
-Dependencies:
-- rrg_eval must be importable (for CheXbert_CONDITIONS and map_to_binary).
-- HF download for StanfordAIMI/RRG_scorers chexbert.pth (unless cached).
-"""
+# run_eval_chexbert_per_target_category.py
 
 from __future__ import annotations
 
@@ -56,24 +19,41 @@ from sklearn.metrics import precision_recall_fscore_support
 from transformers import BertModel, AutoModel, BertTokenizer
 from huggingface_hub import hf_hub_download
 
-from rrg_eval.factuality_utils import CheXbert_CONDITIONS, map_to_binary
+from rrg_eval.factuality_utils import map_to_binary
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# -----------------------------
-# Reproducibility
-# -----------------------------
 random.seed(3)
 np.random.seed(3)
 torch.manual_seed(3)
+
+# Canonical CheXbert heads order (DO NOT CHANGE)
+CheXbert_CONDITIONS = [
+    "Enlarged Cardiomediastinum",
+    "Cardiomegaly",
+    "Lung Opacity",
+    "Lung Lesion",
+    "Edema",
+    "Consolidation",
+    "Pneumonia",
+    "Atelectasis",
+    "Pneumothorax",
+    "Pleural Effusion",
+    "Pleural Other",
+    "Fracture",
+    "Support Devices",
+    "No Finding",
+]
+
+# Output columns: alphabetical, and exclude No Finding
+EXCLUDE_OUTPUT_CLASSES = {"No Finding"}
+OUTPUT_CLASSES_SORTED = sorted([c for c in CheXbert_CONDITIONS if c not in EXCLUDE_OUTPUT_CLASSES])
 
 
 # -----------------------------
 # CheXbert core (minimal inference)
 # -----------------------------
 class UnlabeledDataset(torch.utils.data.Dataset):
-    """Dataset containing report strings without labels."""
-
     def __init__(self, reports: List[str], tokenizer: BertTokenizer):
         self.encoded_imp = self._tokenize(reports, tokenizer)
 
@@ -128,8 +108,6 @@ def load_unlabeled_data(
 
 
 class bert_labeler(torch.nn.Module):
-    """BERT backbone + 14 heads (CheXbert)."""
-
     def __init__(
         self,
         p: float = 0.1,
@@ -165,8 +143,6 @@ class bert_labeler(torch.nn.Module):
 
 
 class CheXbert(torch.nn.Module):
-    """Frozen CheXbert inference wrapper."""
-
     def __init__(self) -> None:
         super().__init__()
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
@@ -198,10 +174,6 @@ class CheXbert(torch.nn.Module):
 
     @torch.no_grad()
     def forward(self, reports: List[str]) -> List[List[int]]:
-        """
-        Returns:
-          outputs: list length 14; each element is list[int] (argmax class) for each report
-        """
         dataloader = load_unlabeled_data(
             reports, self.tokenizer, batch_size=128, num_workers=4
         )
@@ -221,101 +193,171 @@ class CheXbert(torch.nn.Module):
 
 
 # -----------------------------
-# Single-condition metric
+# target_category normalization
 # -----------------------------
-def compute_chexbert_f1_single_condition(
+def _norm_key(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = s.replace("_", " ").replace("-", " ")
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def build_target_category_mapper() -> Dict[str, str]:
+    mapper: Dict[str, str] = {}
+    for c in CheXbert_CONDITIONS:
+        mapper[_norm_key(c)] = c
+
+    aliases = {
+        "no finding": "No Finding",
+        "nofinding": "No Finding",
+        "support device": "Support Devices",
+        "support devices": "Support Devices",
+        "pleural effusion": "Pleural Effusion",
+        "pleural other": "Pleural Other",
+        "lung opacity": "Lung Opacity",
+        "lung lesion": "Lung Lesion",
+        "enlarged cardiomediastinum": "Enlarged Cardiomediastinum",
+        "cardiomegaly": "Cardiomegaly",
+        "atelectasis": "Atelectasis",
+        "pneumonia": "Pneumonia",
+        "pneumothorax": "Pneumothorax",
+        "consolidation": "Consolidation",
+        "edema": "Edema",
+        "fracture": "Fracture",
+    }
+    for k, v in aliases.items():
+        mapper[_norm_key(k)] = v
+
+    return mapper
+
+
+TARGET_CATEGORY_MAPPER = build_target_category_mapper()
+
+
+def map_target_category_to_condition(target_category: str) -> str:
+    key = _norm_key(target_category)
+    if key in TARGET_CATEGORY_MAPPER:
+        return TARGET_CATEGORY_MAPPER[key]
+    raise ValueError(
+        f"Unknown target_category='{target_category}'. "
+        f"Normalized='{key}'. Expected one of:\n{CheXbert_CONDITIONS}"
+    )
+
+
+# -----------------------------
+# Per-target-category metric
+# -----------------------------
+def compute_chexbert_f1_per_target_category(
     preds: List[str],
     refs: List[str],
-    condition: str,
+    target_categories: List[str],
     uncertain_mode: str = "rrg-",
     bootstrap_ci: bool = False,
     n_resamples: int = 500,
     seed: int = 3,
 ) -> Dict[str, Any]:
-    """
-    Compute ONLY binary F1 for a single CheXbert condition.
-    Returns:
-      - bootstrap_ci=False: {"CheXbert_F1_<cond>": f1}
-      - bootstrap_ci=True : {"CheXbert_F1_<cond>": {"median":..., "ci_l":..., "ci_h":...}}
-    """
-    if len(preds) != len(refs):
-        raise ValueError(f"Length mismatch: preds={len(preds)} vs refs={len(refs)}")
-
-    if condition not in CheXbert_CONDITIONS:
+    if not (len(preds) == len(refs) == len(target_categories)):
         raise ValueError(
-            f"Condition '{condition}' not found. Available:\n{list(CheXbert_CONDITIONS)}"
+            f"Length mismatch: preds={len(preds)} refs={len(refs)} target_categories={len(target_categories)}"
         )
 
-    cond_idx = list(CheXbert_CONDITIONS).index(condition)
+    mapped_targets: List[str] = [map_target_category_to_condition(t) for t in target_categories]
+
+    conditions_list = list(CheXbert_CONDITIONS)
+    cond_to_idx = {c: i for i, c in enumerate(conditions_list)}
 
     model = CheXbert()
-    outputs = model(preds + refs)  # list length 14, each list length Ntot
+    outputs = model(preds + refs)  # list length 14; each list length 2N
 
-    cond_outputs = outputs[cond_idx]  # multiclass predictions (0..3) for this condition
+    outputs_bin: List[List[int]] = []
+    for j in range(len(outputs)):
+        if uncertain_mode == "rrg+":
+            outputs_bin.append([map_to_binary(x, "rrg+") for x in outputs[j]])
+        elif uncertain_mode == "rrg-":
+            outputs_bin.append([map_to_binary(x) for x in outputs[j]])
+        else:
+            raise ValueError("uncertain_mode must be 'rrg-' or 'rrg+'")
 
-    # map multiclass -> binary presence/absence, with uncertain policy
-    if uncertain_mode == "rrg+":
-        binary_all = [map_to_binary(x, "rrg+") for x in cond_outputs]
-    elif uncertain_mode == "rrg-":
-        binary_all = [map_to_binary(x) for x in cond_outputs]
-    else:
-        raise ValueError("uncertain_mode must be 'rrg-' or 'rrg+'")
+    N = len(preds)
 
-    y_pred = binary_all[: len(preds)]
-    y_true = binary_all[len(preds) :]
+    idxs_by_cond: Dict[str, List[int]] = {c: [] for c in conditions_list}
+    for i, c in enumerate(mapped_targets):
+        idxs_by_cond[c].append(i)
 
-    def f1_of(indices: List[int]) -> float:
-        _yt = [y_true[i] for i in indices]
-        _yp = [y_pred[i] for i in indices]
+    def f1_for_condition(cond: str, indices: List[int]) -> float:
+        if not indices:
+            return float("nan")
+        j = cond_to_idx[cond]
+        y_pred_j = outputs_bin[j][:N]
+        y_true_j = outputs_bin[j][N:]
+        _yt = [y_true_j[i] for i in indices]
+        _yp = [y_pred_j[i] for i in indices]
         return float(
-            precision_recall_fscore_support(
-                _yt, _yp, average="binary", zero_division=0
-            )[2]
+            precision_recall_fscore_support(_yt, _yp, average="binary", zero_division=0)[2]
         )
 
-    metric_name = f"CheXbert_F1_{condition.replace(' ', '_')}"
-
-    if not bootstrap_ci:
-        return {metric_name: f1_of(list(range(len(y_true))))}
-
+    results: Dict[str, Any] = {}
     rng = random.Random(seed)
-    idxs = list(range(len(y_true)))
-    samples: List[float] = []
-    for _ in tqdm(range(n_resamples), desc=f"bootstrap {metric_name} 95% CI", disable=False):
-        sample = [rng.choice(idxs) for _ in idxs]
-        samples.append(f1_of(sample))
 
-    ci_l, med, ci_h = np.percentile(samples, [2.5, 50, 97.5])
-    return {
-        metric_name: {"median": float(med), "ci_l": float(ci_l), "ci_h": float(ci_h)}
-    }
+    for cond in conditions_list:
+        # we still compute everything internally; filtering for output happens later
+        key = cond  # keep canonical condition name as key
+        indices = idxs_by_cond[cond]
+
+        if not bootstrap_ci:
+            results[key] = f1_for_condition(cond, indices)
+            continue
+
+        if not indices:
+            results[key] = {"median": float("nan"), "ci_l": float("nan"), "ci_h": float("nan")}
+            continue
+
+        samples: List[float] = []
+        for _ in tqdm(range(n_resamples), desc=f"bootstrap CheXbert_F1_{cond} 95% CI", disable=False):
+            boot = [rng.choice(indices) for _ in indices]
+            samples.append(f1_for_condition(cond, boot))
+
+        ci_l, med, ci_h = np.percentile(samples, [2.5, 50, 97.5])
+        results[key] = {"median": float(med), "ci_l": float(ci_l), "ci_h": float(ci_h)}
+
+    return results
 
 
 # -----------------------------
-# Results table builders
+# Results table builders (NEW FORMAT)
 # -----------------------------
 def build_main_results_table(results: Dict[str, Any], bootstrap_ci: bool) -> pd.DataFrame:
     """
-    Format as:
-    - bootstrap_ci=True  -> index ['median','ci_l','ci_h'], columns [metric]
-    - bootstrap_ci=False -> index ['score'], columns [metric]
+    Desired CSV format:
+    - Columns: class names only, alphabetical, excluding "No Finding"
+    - Index:
+        - bootstrap_ci=False -> ["CheXbert F1 score"]
+        - bootstrap_ci=True  -> ["median","ci_l","ci_h"]
     """
-    if bootstrap_ci:
-        # results[metric] is dict median/ci_l/ci_h
-        metric = next(iter(results.keys()))
-        df = pd.DataFrame.from_dict({metric: results[metric]})
-        return df[[metric]]
+    cols = OUTPUT_CLASSES_SORTED
 
-    metric = next(iter(results.keys()))
-    df = pd.DataFrame([{metric: float(results[metric])}], index=["score"])
-    return df
+    if not bootstrap_ci:
+        row = {c: float(results.get(c, float("nan"))) for c in cols}
+        return pd.DataFrame([row], index=["CheXbert F1 score"])[cols]
+
+    # bootstrap: results[c] is dict
+    df = pd.DataFrame(index=["median", "ci_l", "ci_h"], columns=cols, dtype=float)
+    for c in cols:
+        stats = results.get(c, None)
+        if not isinstance(stats, dict):
+            df.loc[:, c] = np.nan
+            continue
+        df.loc["median", c] = float(stats.get("median", np.nan))
+        df.loc["ci_l", c] = float(stats.get("ci_l", np.nan))
+        df.loc["ci_h", c] = float(stats.get("ci_h", np.nan))
+    return df[cols]
 
 
 def main_results_to_single_row(main_results: pd.DataFrame, bootstrap_ci: bool) -> Dict[str, float]:
     """
-    Flatten:
-    - bootstrap_ci=False -> {metric: value}
-    - bootstrap_ci=True  -> {metric_median:..., metric_ci_l:..., metric_ci_h:...}
+    Aggregated CSV row:
+    - bootstrap_ci=False -> {class: score}
+    - bootstrap_ci=True  -> {class_median:..., class_ci_l:..., class_ci_h:...}
     """
     row: Dict[str, float] = {}
     if not bootstrap_ci:
@@ -331,7 +373,7 @@ def main_results_to_single_row(main_results: pd.DataFrame, bootstrap_ci: bool) -
 
 
 # -----------------------------
-# Output path derivation (same logic as your script)
+# Output path derivation (same logic)
 # -----------------------------
 def derive_per_file_output_paths(input_path: str) -> Dict[str, Path]:
     p = Path(input_path).resolve()
@@ -379,7 +421,6 @@ def upsert_aggregated_csv(csv_path: Path, model_name: str, row_dict: Dict[str, f
             df[k] = np.nan
 
     df.loc[model_name, list(row_dict.keys())] = list(row_dict.values())
-
     df = df.sort_index()
     df = df.reindex(sorted(df.columns), axis=1)
     df.to_csv(csv_path)
@@ -390,34 +431,48 @@ def upsert_aggregated_csv(csv_path: Path, model_name: str, row_dict: Dict[str, f
 # -----------------------------
 def run(
     filepath: str,
-    condition: str,
     uncertain_mode: str = "rrg-",
     bootstrap_ci: bool = False,
     n_resamples: int = 500,
-    output_mode: str = "per-file",  # "per-file" or "per-experiment"
+    output_mode: str = "per-file",
     seed: int = 3,
 ) -> None:
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    preds, refs = [], []
+    preds, refs, targs_raw = [], [], []
     for item in data:
         preds.append(item.get("prediction", "") or "")
         refs.append(item.get("reference", "") or "")
+        t = item.get("target_category", None)
+        if t is None:
+            raise ValueError("Some samples are missing 'target_category'.")
+        targs_raw.append(t)
 
-    results = compute_chexbert_f1_single_condition(
+    results = compute_chexbert_f1_per_target_category(
         preds=preds,
         refs=refs,
-        condition=condition,
+        target_categories=targs_raw,
         uncertain_mode=uncertain_mode,
         bootstrap_ci=bootstrap_ci,
         n_resamples=n_resamples,
         seed=seed,
     )
 
+    # print counts per class (canonical)
+    mapped = [map_target_category_to_condition(t) for t in targs_raw]
+    counts = {c: 0 for c in CheXbert_CONDITIONS}
+    for c in mapped:
+        counts[c] += 1
+
     print("\n")
     print(f"Total reports: {len(preds)}\n")
-    print("========== CheXbert Single-Condition Result ==========")
+    print("Samples per target_category:")
+    for c in OUTPUT_CLASSES_SORTED + (["No Finding"] if "No Finding" in counts else []):
+        if c in counts:
+            print(f"- {c}: {counts[c]}")
+    print("\n========== CheXbert Per-Target-Category Results ==========")
+
     main_results = build_main_results_table(results, bootstrap_ci=bootstrap_ci)
     print(main_results)
     print("")
@@ -445,16 +500,13 @@ def run(
 # -----------------------------
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate report generation outputs with CheXbert single-class F1 only."
+        description="Evaluate report generation outputs with CheXbert F1 per target_category (each sample contributes only to its target class)."
     )
-    parser.add_argument("--filepath", type=str, 
-    required=True, help="Path to the JSON predictions file.")
     parser.add_argument(
-        "--condition",
+        "--filepath",
         type=str,
-        default='Atelectasis',
-        #required=True,
-        help="CheXbert condition name (exact string from CheXbert_CONDITIONS).",
+        required=True,
+        help="Path to the JSON predictions file.",
     )
     parser.add_argument(
         "--uncertain-mode",
@@ -463,8 +515,17 @@ def parse_args() -> argparse.Namespace:
         choices=["rrg-", "rrg+"],
         help="How to treat uncertain labels when mapping to binary.",
     )
-    parser.add_argument("--bootstrap-ci", action="store_true", help="Enable bootstrap confidence intervals for F1.")
-    parser.add_argument("--n-resamples", type=int, default=500, help="Number of bootstrap resamples.")
+    parser.add_argument(
+        "--bootstrap-ci",
+        action="store_true",
+        help="Enable bootstrap confidence intervals for F1 (per class).",
+    )
+    parser.add_argument(
+        "--n-resamples",
+        type=int,
+        default=500,
+        help="Number of bootstrap resamples.",
+    )
     parser.add_argument("--seed", type=int, default=3, help="Random seed for bootstrap.")
     parser.add_argument(
         "--output-mode",
@@ -476,7 +537,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--print-conditions",
         action="store_true",
-        help="Print available CheXbert_CONDITIONS and exit.",
+        help="Print canonical CheXbert conditions and the output column order (alphabetical, excluding No Finding).",
     )
     return parser.parse_args()
 
@@ -485,14 +546,16 @@ if __name__ == "__main__":
     args = parse_args()
 
     if args.print_conditions:
-        print("Available CheXbert_CONDITIONS:")
+        print("Canonical CheXbert_CONDITIONS (model head order):")
         for c in CheXbert_CONDITIONS:
+            print(f"- {c}")
+        print("\nCSV output columns (alphabetical, excluding No Finding):")
+        for c in OUTPUT_CLASSES_SORTED:
             print(f"- {c}")
         raise SystemExit(0)
 
     run(
         filepath=args.filepath,
-        condition=args.condition,
         uncertain_mode=args.uncertain_mode,
         bootstrap_ci=args.bootstrap_ci,
         n_resamples=args.n_resamples,

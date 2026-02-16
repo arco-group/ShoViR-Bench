@@ -236,7 +236,7 @@ class RaDialog(BaseHFLM):
         results = []
         for i in range(len(images)):
             generated_text = tokenizer.decode(
-                output_ids[i, input_ids_batch.shape[1]:]
+                output_ids[i, input_ids_batch.shape[1]:], skip_special_tokens=True,
             ).strip().replace("</s>", "")
             results.append({"generated_text": generated_text})
 

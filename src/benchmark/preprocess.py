@@ -276,11 +276,110 @@ def _generate_random_bbox(w: int, h: int) -> tuple[int, int, int, int]:
 
     return x1, y1, x2, y2
 
-def object_class_occlusion(sample: Sample, *, p: float, exp: str) -> Image.Image:
+'''
+
+def object_class_occlusion(sample: Sample, *, p: float, exp: str, debug: bool = True) -> Image.Image:
     """
     Apply matched correlated noise to ALL annotated bboxes in sample['regions'].
 
-    This occludes every annotated bbox (even if far apart). Occlusion is applied bbox-by-bbox.
+    Debug stampa:
+      - tempo load + to_uint8_rgb
+      - tempo match_noise_fill (una volta)
+      - tempo totale blend (somma) + tempo per bbox (medio)
+      - n bbox, area totale bbox, HxW, path
+    """
+    t0 = time.perf_counter()
+
+    # --- load + normalize ---
+    tA0 = time.perf_counter()
+    raw_img = _load_image_from_sample(sample)
+    tA1 = time.perf_counter()
+    image = _to_uint8_rgb(raw_img)
+    tA2 = time.perf_counter()
+
+    img_arr = np.asarray(image, dtype=np.uint8)
+    h, w, _ = img_arr.shape
+
+    if p <= 0.0:
+        if debug:
+            print(f"[OCO] p<=0 | load={tA1-tA0:.4f}s to_u8={tA2-tA1:.4f}s | size={w}x{h} mode={raw_img.mode}")
+        return image
+
+    # --- bboxes ---
+    tB0 = time.perf_counter()
+    bboxes = _collect_all_region_bboxes(sample, w=w, h=h, exp=exp)
+    tB1 = time.perf_counter()
+
+    if not bboxes:
+        if debug:
+            print(f"[OCO] no bboxes | load={tA1-tA0:.4f}s to_u8={tA2-tA1:.4f}s bbox={tB1-tB0:.4f}s | size={w}x{h}")
+        return image
+
+    # bbox stats
+    bbox_areas = [(x2 - x1) * (y2 - y1) for (x1, y1, x2, y2) in bboxes]
+    total_bbox_area = int(sum(bbox_areas))
+    frac = total_bbox_area / float(h * w)
+
+    out = img_arr
+
+    # --- fill (1x) ---
+    tC0 = time.perf_counter()
+    x1, y1, x2, y2 = bboxes[0]
+    region_mask = np.zeros((h, w), dtype=bool)
+    region_mask[y1:y2, x1:x2] = True
+    fill = _matched_correlated_noise_fill(out, region_mask, blur_radius=2.0)
+    tC1 = time.perf_counter()
+
+    # --- blends (Nx) ---
+    tD0 = time.perf_counter()
+    blend_times = []
+    for (x1, y1, x2, y2) in bboxes:
+        # mask full-frame (costoso, ma lo stiamo misurando)
+        m0 = time.perf_counter()
+        region_mask = np.zeros((h, w), dtype=bool)
+        region_mask[y1:y2, x1:x2] = True
+        m1 = time.perf_counter()
+
+        b0 = time.perf_counter()
+        out = _blend_region(out, fill, region_mask, p=p, feather_radius=6)
+        b1 = time.perf_counter()
+
+        blend_times.append((m1 - m0, b1 - b0))
+
+    tD1 = time.perf_counter()
+    t1 = time.perf_counter()
+
+    if debug:
+        # summarize
+        mask_sum = sum(mt for mt, bt in blend_times)
+        blend_sum = sum(bt for mt, bt in blend_times)
+        n = len(bboxes)
+
+        img_path = sample.get("img_path", "")
+        mode = getattr(raw_img, "mode", "?")
+
+        print(
+            f"[OCO] {img_path} | size={w}x{h} mode={mode} | "
+            f"n_bbox={n} bbox_area_frac={frac:.4f} | "
+            f"load={tA1-tA0:.4f}s to_u8={tA2-tA1:.4f}s bbox_collect={tB1-tB0:.4f}s | "
+            f"fill={tC1-tC0:.4f}s | "
+            f"mask_alloc_total={mask_sum:.4f}s ({mask_sum/max(n,1):.4f}s/box) | "
+            f"blend_total={blend_sum:.4f}s ({blend_sum/max(n,1):.4f}s/box) | "
+            f"TOTAL={t1-t0:.4f}s"
+        )
+
+    return Image.fromarray(out, mode="RGB")
+'''
+
+def object_class_occlusion(sample: Sample, *, p: float, exp: str) -> Image.Image:
+    """
+    Apply matched correlated noise to ALL annotated bboxes using a UNION mask.
+
+    - Collect all valid bboxes from the sample (field depends on exp: "oco" vs "doco")
+    - Build a union mask (OR of all bboxes)
+    - Estimate noise stats from pixels OUTSIDE the union mask (robust median/std)
+    - Generate correlated noise fill (blurred) for the whole image
+    - Blend ONLY inside the union mask with strength p and feathered edges
     """
     image = _to_uint8_rgb(_load_image_from_sample(sample))
     img_arr = np.array(image, dtype=np.uint8)
@@ -293,14 +392,13 @@ def object_class_occlusion(sample: Sample, *, p: float, exp: str) -> Image.Image
     if not bboxes:
         return image
 
-    out = img_arr
+    union = np.zeros((h, w), dtype=bool)
     for x1, y1, x2, y2 in bboxes:
-        region_mask = np.zeros((h, w), dtype=bool)
-        region_mask[y1:y2, x1:x2] = True
+        union[y1:y2, x1:x2] = True
 
-        fill = _matched_correlated_noise_fill(out, region_mask, blur_radius=2.0)
-        out = _blend_region(out, fill, region_mask, p=p, feather_radius=6)
-
+    fill = _matched_correlated_noise_fill(img_arr, union, blur_radius=2.0)
+    out = _blend_region(img_arr, fill, union, p=p, feather_radius=6)
+    
     return Image.fromarray(out, mode="RGB")
 
 
