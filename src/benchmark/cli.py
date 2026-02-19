@@ -228,7 +228,7 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
                             sample_copy["target_category"] = category
                             dataset[composite_key] = sample_copy
 
-    elif dataset_name == "mimic-cxr-jpg" and (experiment.startswith("oco") or experiment.startswith("ro")):
+    elif dataset_name == "mimic-cxr-jpg" and (experiment.startswith(("oco", "doco", "ro"))):
         chexpert_dir = Path(data_json_path).parent / "classes_jsons"
 
         valid_categories = [
@@ -243,13 +243,13 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
             "Pleural_Effusion",
             "Pleural_Other",
             "Pneumonia",
-            "Pneumothorax"
+            "Pneumothorax",
             "Support_Devices",
         ]
 
         dataset = {}
         for category in valid_categories:
-            category_file = chexpert_dir / f"{category}.json"
+            category_file = chexpert_dir / f"{category}_samples.json"
             if category_file.exists():
                 with category_file.open("r", encoding="utf-8") as f:
                     category_data = json.load(f)

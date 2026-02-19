@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "MIMIC: CXRMateED OCO50",
+            "name": "MIMIC: CXRMateED DOCO100",
             "type": "debugpy",
             "request": "launch",
             "module": "src.benchmark.cli",
@@ -15,17 +15,67 @@
                 "--model", "cxrmateed",
                 "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json",
                 "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files",
-                "--experiment", "oco_p50",
+                "--experiment", "doco_p100",
                 "--output-dir", "outputs",
                 "--cache-dir", ".models_cache",
                 "--device", "cuda:0",
                 "--dtype", "bfloat16",
                 "--trust-remote-code",
                 "--max-images", "500",
-                "--num-images", "64"
+                "--num-images", "128"
             ],
             "env": {
-                "HF_TOKEN": "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"
+                "HF_TOKEN": "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",
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "MIMIC: Radialog RO100",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "radialog",
+                "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json",
+                "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files",
+                "--experiment", "ro_p100",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images","500",
+                "--num-images", "32"
+            ],
+            "env": {
+                "HF_TOKEN": "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",
+            },
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "MIMIC: CXRMateED RO100",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.benchmark.cli",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "--model", "cxrmateed",
+                "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json",
+                "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files",
+                "--experiment", "ro_p100",
+                "--output-dir", "outputs",
+                "--cache-dir", ".models_cache",
+                "--device", "cuda:0",
+                "--dtype", "bfloat16",
+                "--trust-remote-code",
+                "--max-images","1000",
+                "--num-images", "256"
+            ],
+            "env": {
+                "HF_TOKEN": "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",
             },
             "envFile": "${workspaceFolder}/.env"
         },
@@ -402,8 +452,8 @@
             "console": "integratedTerminal",
             "args": [
                 "--model", "cxrmateed",
-                "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json",
-                "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files",
+                "--data-json", "/mimer/NOBACKUP/groups/naiss2023-6-336/Shortcut-RRG/Shortcut-Learning-RRG/data/padchest-gr/chexpert-by-label/verified_samples.json",
+                "--data", "/mimer/NOBACKUP/groups/naiss2023-6-336/Shortcut-RRG/Shortcut-Learning-RRG/data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images",
                 "--experiment", "oco_p50",
                 "--output-dir", "outputs",
                 "--cache-dir", ".models_cache",

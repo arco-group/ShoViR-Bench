@@ -145,8 +145,8 @@ def run_inference(
         ]
 
         load_workers = min(os.cpu_count() or 4, 16)
-        chunksize = max(1, len(work_items) // (load_workers * 4))
-
+        #chunksize = max(1, len(work_items) // (load_workers * 32))
+        chunksize=16
         # forkserver is safe when CUDA is already initialised in the parent;
         # workers are forked from a pristine server process (no CUDA context).
         try:
@@ -177,13 +177,14 @@ def run_inference(
 
         # ── Phase 2: inference via DataLoader (reads from disk cache) ──
         ds = _CachedDataset(cache_dir, file_indices, metadata)
-        dl_workers = min(4, load_workers)
+        #dl_workers = min(4, load_workers)
+        dl_workers=0
         loader = DataLoader(
             ds,
             batch_size=num_images,
             shuffle=False,
             num_workers=dl_workers,
-            prefetch_factor=2,
+            #prefetch_factor=2,
             collate_fn=_collate_pil,
         )
 
