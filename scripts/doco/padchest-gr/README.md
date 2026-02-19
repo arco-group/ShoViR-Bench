@@ -73,6 +73,9 @@ At runtime you will see a log line like:
 ## Monitor & Cancel
 
 ```bash
+# Check experiment status (SLURM + output files)
+./scripts/doco/status.sh
+
 # Check running jobs
 squeue -u $USER
 

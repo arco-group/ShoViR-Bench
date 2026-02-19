@@ -15,6 +15,7 @@ set -euo pipefail
 
 EXPERIMENT="${1:-ro_p100}"
 SEED="${2:-3}"
+EXTRA_ARGS="${3:-}"
 
 echo "=== CheXagent Random Occlusion ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -23,7 +24,7 @@ echo "Experiment: ${EXPERIMENT}"
 echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
-
+module purge
 module load Python/3.11.5-GCCcore-13.2.0
 source .venv_chexagent/bin/activate
 
@@ -52,7 +53,7 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 40 
+    --num-images 24 
 echo ""
 echo "=== Job Complete ==="
 echo "End time: $(date)"

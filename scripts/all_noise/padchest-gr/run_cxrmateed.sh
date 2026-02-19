@@ -14,6 +14,8 @@
 
 set -euo pipefail
 
+EXTRA_ARGS="${1:-}"
+
 echo "=== CXRMateED All Noise ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURMD_NODENAME"
@@ -21,6 +23,7 @@ echo "Start time: $(date)"
 echo ""
 
 # Load Python module
+module purge
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate virtual environment
@@ -54,7 +57,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 128
+    --num-images 128 \
+    ${EXTRA_ARGS}
 
 echo ""
 echo "=== Job Complete ==="

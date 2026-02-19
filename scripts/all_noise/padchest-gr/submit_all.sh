@@ -12,10 +12,46 @@ cd "$PROJECT_DIR"
 # Create log directory
 mkdir -p logs/all_noise
 
-# Check for dry-run flag
+# Defaults
 DRY_RUN=false
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
+SKIP_EXISTING=false
+EXPERIMENT="all_noise"
+SEED="3"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true; shift ;;
+        --skip-existing) SKIP_EXISTING=true; shift ;;
+        *) echo "Unknown argument: $1"; echo "Usage: $0 [--dry-run] [--skip-existing]"; exit 1 ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Output-existence check (used by --skip-existing).
+# Maps model key -> search pattern inside output filenames.
+# nv_reason_cxr is special: CLI writes files named *nv_reason* not *nv_reason_cxr*.
+# ---------------------------------------------------------------------------
+declare -A _MODEL_PATTERN=(
+    ["medgemma"]="medgemma"   ["maira2"]="maira2"
+    ["chexagent"]="chexagent" ["chexone"]="chexone"
+    ["libra"]="libra"         ["cxrmateed"]="cxrmateed"
+    ["nv_reason_cxr"]="nv_reason"
+    ["radialog"]="radialog"   ["llavarad"]="llavarad"
+)
+_output_exists() {   # _output_exists <model> <experiment> <seed>
+    local model="$1" exp="$2" seed="${3:-3}"
+    local pat="${_MODEL_PATTERN[$model]:-$model}"
+    local dir
+    if [[ "$exp" =~ ^(oco|doco|roco|ro)_(.+)$ ]]; then
+        dir="outputs/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/padchest-gr"
+    else
+        dir="outputs/${exp}/padchest-gr"
+    fi
+    compgen -G "${dir}/*${pat}*::seed=${seed}.json" > /dev/null 2>&1
+}
+
+if $DRY_RUN; then
     echo "=== DRY RUN MODE ==="
     echo ""
 fi
@@ -58,8 +94,13 @@ for model in "${MODELS[@]}"; do
         continue
     fi
 
+    if $SKIP_EXISTING && _output_exists "$model" "$EXPERIMENT" "$SEED"; then
+        echo "  [SKIP] $model - output already exists (seed=${SEED})"
+        continue
+    fi
+
     if $DRY_RUN; then
-        echo "  [DRY] Would submit: $script"
+        echo "  [DRY] Would submit: sbatch $script"
     else
         job_id=$(sbatch --parsable "$script")
         JOB_IDS+=("$job_id")

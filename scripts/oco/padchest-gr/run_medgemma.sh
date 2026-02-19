@@ -23,7 +23,7 @@ echo "Experiment: ${EXPERIMENT}"
 echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
-
+module purge
 module load Python/3.11.5-GCCcore-13.2.0
 source .venv_RRG/bin/activate
 

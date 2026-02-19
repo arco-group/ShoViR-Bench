@@ -94,6 +94,7 @@ cd "$PROJECT_DIR"
 
 # Load module and venv (skip if not on SLURM or already activated)
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    module purge
     module load Python/3.11.5-GCCcore-13.2.0 2>/dev/null || true
 fi
 

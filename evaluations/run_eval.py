@@ -47,6 +47,7 @@ from pathlib import Path
 import argparse
 import json
 import random
+import time
 
 import evaluate
 import numpy as np
@@ -140,7 +141,7 @@ def radgraph(predictions, references, bootstrap_ci: bool = False):
       - dict_score directly
     This function normalizes all cases.
     """
-    model = F1RadGraphv2(reward_level="partial", batch_size=1)
+    model = F1RadGraphv2(reward_level="partial", batch_size=256)
 
     def _to_float(score_obj):
         """Extract a float score from either a float or a dict."""
@@ -183,6 +184,19 @@ SCORER_NAME_TO_FN: Dict[str, Callable[..., Any]] = {
     "BERTScore": bertscore,
     "F1-RadGraph": radgraph,
     "CheXbert": chexbert,
+}
+
+# Maps each scorer name to the representative output column(s) it produces.
+# Used to detect whether a scorer's results already exist in a saved CSV.
+SCORER_OUTPUT_COLUMNS: Dict[str, List[str]] = {
+    "CheXbert": ["Micro-F1-14", "Macro-F1-14", "Micro-F1-5", "Macro-F1-5",
+                  "Micro-F1-14+", "Macro-F1-14+", "Micro-F1-5+", "Macro-F1-5+"],
+    "F1-RadGraph": ["F1-RadGraph"],
+    "BLEU-1": ["BLEU-1"],
+    "BLEU-4": ["BLEU-4"],
+    "ROUGE-L": ["ROUGE-L"],
+    "ROUGE-2": ["ROUGE-2"],
+    "BERTScore": ["BERTScore"],
 }
 
 
@@ -448,27 +462,97 @@ def compute_green_metric(
 
 
 # -----------------------------
+# Incremental evaluation helpers
+# -----------------------------
+def _load_existing_row(filepath: str, output_mode: str, bootstrap_ci: bool) -> Dict[str, float]:
+    """Load already-computed metric values for this model from saved CSVs.
+
+    Lookup order for *per-experiment* mode:
+      1. Per-file CSV  (results/<experiment>/<dataset>/<model>.csv)
+      2. Aggregated CSV (results/<experiment>/<dataset>/results.csv)
+
+    For *per-file* mode only the per-file CSV is checked.
+
+    Returns a **flat** dict  {column_name: value}  using the same format as
+    ``main_results_to_single_row`` (with ``_median``/``_ci_l``/``_ci_h``
+    suffixes when *bootstrap_ci* is True for per-experiment rows).
+    An empty dict means nothing was found.
+    """
+    model_name = Path(filepath).with_suffix("").name
+    row: Dict[str, float] = {}
+
+    # --- try per-file CSV first (works for both modes) ---
+    per_file_csv = derive_per_file_output_paths(filepath)["main"]
+    if per_file_csv.exists():
+        df = pd.read_csv(per_file_csv, index_col=0)
+        # Per-file DF: index = ['score'] or ['median','ci_l','ci_h']
+        if output_mode == "per-experiment":
+            # Flatten into the per-experiment row format
+            if bootstrap_ci:
+                for stat in df.index:
+                    for col in df.columns:
+                        val = df.loc[stat, col]
+                        if not pd.isna(val):
+                            row[f"{col}_{stat}"] = float(val)
+            else:
+                idx = df.index[0]
+                for col in df.columns:
+                    val = df.loc[idx, col]
+                    if not pd.isna(val):
+                        row[col] = float(val)
+        else:
+            # per-file mode: same flat format
+            idx = df.index[0] if not bootstrap_ci else "median"
+            if idx in df.index:
+                for col in df.columns:
+                    val = df.loc[idx, col]
+                    if not pd.isna(val):
+                        row[col] = float(val)
+        if row:
+            return row
+
+    # --- for per-experiment, also try the aggregated CSV ---
+    if output_mode == "per-experiment":
+        agg_csv = derive_experiment_dataset_results_csv(filepath)
+        if agg_csv.exists():
+            df = pd.read_csv(agg_csv, index_col=0)
+            if model_name in df.index:
+                for col in df.columns:
+                    val = df.loc[model_name, col]
+                    if not pd.isna(val):
+                        row[col] = float(val)
+
+    return row
+
+
+def _find_missing_scorers(
+    existing_row: Dict[str, float],
+    requested_scorers: List[str],
+    bootstrap_ci: bool,
+) -> List[str]:
+    """Return the subset of *requested_scorers* whose results are NOT in *existing_row*."""
+    missing: List[str] = []
+    for scorer in requested_scorers:
+        output_cols = SCORER_OUTPUT_COLUMNS.get(scorer, [scorer])
+        # With bootstrap CI in per-experiment format, columns have _median suffix
+        if bootstrap_ci:
+            check_cols = [f"{c}_median" for c in output_cols]
+        else:
+            check_cols = output_cols
+        if not all(c in existing_row for c in check_cols):
+            missing.append(scorer)
+    return missing
+
+
+def _green_is_missing(existing_row: Dict[str, float]) -> bool:
+    """Check whether GREEN values are absent from an existing row."""
+    return "GREEN_mean" not in existing_row
+
+
+
+# -----------------------------
 # Main runner
 # -----------------------------
-def _results_exist(filepath: str, output_mode: str) -> bool:
-    """Check whether results already exist for this file/model."""
-    model_name = Path(filepath).with_suffix("").name
-
-    if output_mode == "per-experiment":
-        csv_path = derive_experiment_dataset_results_csv(filepath)
-        if csv_path.exists():
-            df = pd.read_csv(csv_path, index_col=0)
-            if model_name in df.index:
-                return True
-    elif output_mode == "per-file":
-        out_paths = derive_per_file_output_paths(filepath)
-        if out_paths["main"].exists():
-
-            return True
-    print("not-found")
-    return False
-
-
 def run(
     filepath: str,
     scorers: Optional[List[str]] = None,
@@ -481,40 +565,81 @@ def run(
     green_model_name: str = "StanfordAIMI/GREEN-radllama2-7b",
     skip_existing: bool = False,
 ) -> None:
-    # Skip if results already exist and --skip-existing is set
-    if skip_existing and _results_exist(filepath, output_mode):
-        model_name = Path(filepath).with_suffix("").name
-        print(f"[SKIP] Results already exist for '{model_name}' ({output_mode}). Use without --skip-existing to override.")
-        return
-
-    # Load JSON list of samples
-    with open(filepath, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Extract text fields (expects keys: 'prediction' and 'reference')
-    preds, refs = [], []
-    for item in data:
-        preds.append(item.get("prediction", ""))
-        refs.append(item.get("reference", ""))
+    model_name = Path(filepath).with_suffix("").name
 
     # Default scorers (GREEN is controlled separately)
     if scorers is None:
         scorers = ["CheXbert", "F1-RadGraph", "BLEU-1", "BLEU-4", "ROUGE-L"]
 
-    evaluator = ReportGenerationEvaluator(scorers=scorers, bootstrap_ci=bootstrap_ci)
-    results = evaluator.evaluate(preds, refs)
+    # --- Determine what already exists and what is missing ---
+    existing_row: Dict[str, float] = {}
+    if skip_existing:
+        existing_row = _load_existing_row(filepath, output_mode, bootstrap_ci)
 
-    print("\n")
-    print(f"Total reports: {len(preds)}\n")
+    missing_scorers = _find_missing_scorers(existing_row, scorers, bootstrap_ci) if existing_row else scorers
+    need_green = compute_green and _green_is_missing(existing_row) if existing_row else compute_green
+
+    # If everything is already computed, skip evaluation but still populate per-experiment CSV
+    if skip_existing and not missing_scorers and not need_green:
+        if output_mode == "per-experiment" and existing_row:
+            csv_path = derive_experiment_dataset_results_csv(filepath)
+            upsert_aggregated_csv(csv_path, model_name=model_name, row_dict=existing_row)
+            print(f"[SKIP] All metrics already exist for '{model_name}'. "
+                  f"Populated aggregated CSV from per-file results: {csv_path}")
+        else:
+            print(f"[SKIP] All requested metrics already exist for '{model_name}' ({output_mode}). "
+                  "Use without --skip-existing to override.")
+        return
+
+    if existing_row:
+        found = [s for s in scorers if s not in missing_scorers]
+        if found:
+            print(f"[REUSE] Loaded existing results for: {', '.join(found)}")
+        if missing_scorers:
+            print(f"[COMPUTE] Missing scorers to compute: {', '.join(missing_scorers)}")
+        if need_green:
+            print(f"[COMPUTE] GREEN metric missing — will compute")
+        elif compute_green and not need_green:
+            print(f"[REUSE] GREEN already present")
+
+    t_start = time.perf_counter()
+
+    # --- Load predictions/references (only if we need to compute something) ---
+    preds: List[str] = []
+    refs: List[str] = []
+    results: Dict[str, Any] = {}
+
+    if missing_scorers or need_green:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for item in data:
+            preds.append(item.get("prediction", ""))
+            refs.append(item.get("reference", ""))
+        print(f"Total reports: {len(preds)}\n")
+
+    # --- Compute only the missing core metrics ---
+    if missing_scorers:
+        evaluator = ReportGenerationEvaluator(scorers=missing_scorers, bootstrap_ci=bootstrap_ci)
+        results = evaluator.evaluate(preds, refs)
+
+    # Build the main results table from newly computed metrics
+    main_results = build_main_results_table(results, bootstrap_ci=bootstrap_ci) if results else pd.DataFrame()
+
+    # Flatten newly computed results into a row dict
+    new_row: Dict[str, float] = {}
+    if not main_results.empty:
+        new_row = main_results_to_single_row(main_results, bootstrap_ci=bootstrap_ci)
 
     print("========== Main Results (core) ==========")
-    main_results = build_main_results_table(results, bootstrap_ci=bootstrap_ci)
-    print(main_results)
+    if not main_results.empty:
+        print(main_results)
+    else:
+        print("(all core metrics loaded from cache)")
     print("")
 
-    # Compute GREEN if requested (adds GREEN_mean and GREEN_std)
+    # --- Compute GREEN if missing and requested ---
     green_vals: Dict[str, float] = {}
-    if compute_green:
+    if need_green:
         out_dir_for_green = breakdown_output_dir_for_mode(filepath, output_mode)
         out_dir_for_green.mkdir(parents=True, exist_ok=True)
         green_vals = compute_green_metric(
@@ -526,64 +651,76 @@ def run(
         print("========== GREEN ==========")
         print(green_vals)
         print("")
+    elif compute_green and not _green_is_missing(existing_row):
+        # Carry forward existing GREEN values
+        green_vals = {
+            "GREEN_mean": existing_row["GREEN_mean"],
+            "GREEN_std": existing_row.get("GREEN_std", float("nan")),
+        }
 
-    # Save outputs based on the selected mode
-    model_name = Path(filepath).with_suffix("").name
+    # --- Merge existing + new into a single row ---
+    merged_row: Dict[str, float] = {}
+    merged_row.update(existing_row)   # start with what we had
+    merged_row.update(new_row)        # overwrite with freshly computed
+    if green_vals:
+        merged_row.update(green_vals)
 
+    # --- Save outputs ---
     if output_mode == "per-file":
         out_paths = derive_per_file_output_paths(filepath)
         out_paths["main"].parent.mkdir(parents=True, exist_ok=True)
 
-        # If GREEN is computed, add it to the saved CSV
-        if compute_green:
-            if bootstrap_ci:
-                # Add GREEN columns to each row, best effort:
-                # Put values on 'median' row and NaN elsewhere, since GREEN has no CI.
-                for col in ("GREEN_mean", "GREEN_std"):
-                    main_results[col] = np.nan
-                if "median" in main_results.index:
-                    main_results.loc["median", "GREEN_mean"] = green_vals["GREEN_mean"]
-                    main_results.loc["median", "GREEN_std"] = green_vals["GREEN_std"]
-            else:
-                main_results["GREEN_mean"] = green_vals["GREEN_mean"]
-                main_results["GREEN_std"] = green_vals["GREEN_std"]
+        # Rebuild a full main_results DF for per-file saving
+        if bootstrap_ci:
+            # Reconstruct from merged_row: columns without suffix -> rows median/ci_l/ci_h
+            stats = ["median", "ci_l", "ci_h"]
+            col_set: set = set()
+            for k in merged_row:
+                for s in stats:
+                    if k.endswith(f"_{s}"):
+                        col_set.add(k[: -(len(s) + 1)])
+                        break
+            # Also include non-suffixed keys (e.g. GREEN_mean, GREEN_std)
+            save_dict: Dict[str, Dict[str, float]] = {}
+            for col in col_set:
+                save_dict[col] = {s: merged_row.get(f"{col}_{s}", float("nan")) for s in stats}
+            save_df = pd.DataFrame(save_dict)
+            # Add GREEN columns if present
+            if green_vals:
+                save_df["GREEN_mean"] = float("nan")
+                save_df["GREEN_std"] = float("nan")
+                if "median" in save_df.index:
+                    save_df.loc["median", "GREEN_mean"] = green_vals["GREEN_mean"]
+                    save_df.loc["median", "GREEN_std"] = green_vals["GREEN_std"]
+            cols = [c for c in MAIN_METRICS_ORDER if c in save_df.columns]
+            extra = [c for c in save_df.columns if c not in MAIN_METRICS_ORDER]
+            save_df = save_df[cols + extra]
+        else:
+            # Simple: one row from merged_row
+            save_df = pd.DataFrame([merged_row], index=["score"])
+            cols = [c for c in MAIN_METRICS_ORDER if c in save_df.columns]
+            extra = [c for c in save_df.columns if c not in MAIN_METRICS_ORDER]
+            save_df = save_df[cols + extra]
 
-        main_results.to_csv(out_paths["main"], index=True)
+        save_df.to_csv(out_paths["main"], index=True)
         print(f"Saved per-file main results to: {out_paths['main']}")
 
     elif output_mode == "per-experiment":
         csv_path = derive_experiment_dataset_results_csv(filepath)
-
-        row_dict = main_results_to_single_row(main_results, bootstrap_ci=bootstrap_ci)
-        # Add GREEN to the aggregated row (always scalar columns)
-        if compute_green:
-            row_dict.update(green_vals)
-
-        upsert_aggregated_csv(csv_path, model_name=model_name, row_dict=row_dict)
+        upsert_aggregated_csv(csv_path, model_name=model_name, row_dict=merged_row)
         print(f"Updated aggregated CSV: {csv_path} (row='{model_name}')")
 
     else:
         raise ValueError("Invalid output_mode. Use 'per-file' or 'per-experiment'.")
 
-    # Optional W&B logging (GREEN included if computed)
+    # Optional W&B logging
     if wandb:
-        wandb_results = {}
-        if bootstrap_ci:
-            for metric in main_results.columns:
-                for stat in main_results.index:
-                    val = main_results.loc[stat, metric]
-                    if pd.isna(val):
-                        continue
-                    wandb_results[f"{metric}-{stat}"] = float(val)
-        else:
-            for metric in main_results.columns:
-                wandb_results[metric] = float(main_results.loc["score", metric])
-
+        wandb_results = {k: v for k, v in merged_row.items() if not pd.isna(v)}
         wandb.init(name=run_name)
         wandb.log(wandb_results)
 
-    # Optionally save CheXbert breakdown tables
-    if save_breakdowns:
+    # Optionally save CheXbert breakdown tables (only if CheXbert was computed this run)
+    if save_breakdowns and "breakdown+" in results:
         out_dir = breakdown_output_dir_for_mode(filepath, output_mode)
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -619,6 +756,10 @@ def run(
             print("")
             chexbert_df.to_csv(chexbert_detailed_path)
             print(f"Saved chexbert detailed to: {chexbert_detailed_path}")
+
+    elapsed = time.perf_counter() - t_start
+    mins, secs = divmod(elapsed, 60)
+    print(f"\n[TIME] Evaluation for '{model_name}' completed in {int(mins)}m {secs:.1f}s")
 
 
 def parse_args() -> argparse.Namespace:

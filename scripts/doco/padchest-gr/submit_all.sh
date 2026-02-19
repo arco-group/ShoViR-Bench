@@ -13,6 +13,7 @@ cd "$PROJECT_DIR"
 EXPERIMENT="doco_p100"
 SEED="3"
 DRY_RUN=false
+SKIP_EXISTING=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -20,7 +21,8 @@ while [[ $# -gt 0 ]]; do
         --experiment) EXPERIMENT="$2"; shift 2 ;;
         --seed) SEED="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
-        *) echo "Unknown argument: $1"; echo "Usage: $0 --experiment doco_pXX --seed N [--dry-run]"; exit 1 ;;
+        --skip-existing) SKIP_EXISTING=true; shift ;;
+        *) echo "Unknown argument: $1"; echo "Usage: $0 --experiment doco_pXX --seed N [--dry-run] [--skip-existing]"; exit 1 ;;
     esac
 done
 
@@ -73,10 +75,13 @@ for model in "${MODELS[@]}"; do
         continue
     fi
 
+    EXTRA_ARGS=""
+    $SKIP_EXISTING && EXTRA_ARGS="--skip-existing"
+
     if $DRY_RUN; then
-        echo "  [DRY] Would submit: sbatch $script $EXPERIMENT $SEED"
+        echo "  [DRY] Would submit: sbatch $script $EXPERIMENT $SEED $EXTRA_ARGS"
     else
-        job_id=$(sbatch --parsable "$script" "$EXPERIMENT" "$SEED")
+        job_id=$(sbatch --parsable "$script" "$EXPERIMENT" "$SEED" $EXTRA_ARGS)
         JOB_IDS+=("$job_id")
         echo "  [OK] $model - Job ID: $job_id"
     fi
