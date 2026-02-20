@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -A NAISS2025-5-662 -p alvis
-#SBATCH -N 1 --gpus-per-node=T4:1
+#SBATCH -N 1 --gpus-per-node=A40:1
 #SBATCH -t 00-04:00:00
 #SBATCH --error=job_%J.err
 #SBATCH --output=out_%J.out
@@ -16,7 +16,7 @@ ml Python/3.10.4-GCCcore-11.3.0
 WORKDIR="/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG"
 VENV="${WORKDIR}/.venv_eval"
 
-DIR="/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/outputs/ro/p100/mimic-cxr-jpg"
+DIR="/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/outputs/doco/p100/mimic-cxr-jpg"
 
 # --- Activate venv ---
 cd "${VENV}" || exit 1

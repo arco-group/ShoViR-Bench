@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-EXPERIMENT="baseline"
+EXPERIMENT="all_noise_mean"
 SEED="${2:-3}"
 
 echo "=== RaDialog Baseline ==="
@@ -34,7 +34,7 @@ export HF_HOME="${PWD}/.models_cache"
 export HF_TOKEN="${HF_TOKEN:-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}"
 export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
 
-mkdir -p logs/ro
+mkdir -p logs/all_noise_mean
 
 DATA_DIR="/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/ReportGenerationData/mimic_test_imagenome/mimic-cxr-jpg/2.1.0/files"
 DATA_JSON="/mimer/NOBACKUP/groups/naiss2023-6-336/msalme/Shortcut-Learning-RRG/data/mimic_test_annotation.json"

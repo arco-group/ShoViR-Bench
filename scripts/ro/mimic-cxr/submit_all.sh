@@ -44,12 +44,12 @@ echo ""
 MODELS=(
     #"medgemma"
     #"maira2"
-    "chexagent"
+    #"chexagent"
     #"chexone"
     #"libra"
     #"cxrmateed"
     #"nv_reason_cxr"
-    #"radialog"
+    "radialog"
     #"llavarad"
 )
 

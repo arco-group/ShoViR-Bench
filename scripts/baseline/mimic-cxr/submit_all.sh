@@ -10,7 +10,7 @@ PROJECT_DIR="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
 cd "$PROJECT_DIR"
 
 # Defaults
-EXPERIMENT="baseline"
+EXPERIMENT="all_noise_mean"
 SEED="3"
 DRY_RUN=false
 
@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Create log directory
-mkdir -p logs/ro
+mkdir -p logs/all_noise_mean
 
 if $DRY_RUN; then
     echo "=== DRY RUN MODE ==="
@@ -64,7 +64,7 @@ echo "Submitting jobs..."
 JOB_IDS=()
 
 for model in "${MODELS[@]}"; do
-    script="scripts/ro/mimic-cxr/run_${model}.sh"
+    script="scripts/baseline/mimic-cxr/run_${model}.sh"
 
     if [[ ! -f "$script" ]]; then
         echo "  [SKIP] $model - script not found: $script"
