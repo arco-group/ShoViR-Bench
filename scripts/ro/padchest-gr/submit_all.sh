@@ -29,6 +29,30 @@ done
 # Create log directory
 mkdir -p logs/ro
 
+# ---------------------------------------------------------------------------
+# Output-existence check (used by --skip-existing).
+# Maps model key -> search pattern inside output filenames.
+# nv_reason_cxr is special: CLI writes files named *nv_reason* not *nv_reason_cxr*.
+# ---------------------------------------------------------------------------
+declare -A _MODEL_PATTERN=(
+    ["medgemma"]="medgemma"   ["maira2"]="maira2"
+    ["chexagent"]="chexagent" ["chexone"]="chexone"
+    ["libra"]="libra"         ["cxrmateed"]="cxrmateed"
+    ["nv_reason_cxr"]="nv_reason"
+    ["radialog"]="radialog"   ["llavarad"]="llavarad"
+)
+_output_exists() {   # _output_exists <model> <experiment> <seed>
+    local model="$1" exp="$2" seed="${3:-3}"
+    local pat="${_MODEL_PATTERN[$model]:-$model}"
+    local dir
+    if [[ "$exp" =~ ^(oco|doco|roco|ro)_(.+)$ ]]; then
+        dir="outputs/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/padchest-gr"
+    else
+        dir="outputs/${exp}/padchest-gr"
+    fi
+    compgen -G "${dir}/*${pat}*::seed=${seed}.json" > /dev/null 2>&1
+}
+
 if $DRY_RUN; then
     echo "=== DRY RUN MODE ==="
     echo ""

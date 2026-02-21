@@ -97,13 +97,15 @@ for model in "${MODELS[@]}"; do
         continue
     fi
 
-    EXTRA_ARGS=""
-    $SKIP_EXISTING && EXTRA_ARGS="--skip-existing"
+    if $SKIP_EXISTING && _output_exists "$model" "$EXPERIMENT" "$SEED"; then
+        echo "  [SKIP] $model - output already exists (${EXPERIMENT}, seed=${SEED})"
+        continue
+    fi
 
     if $DRY_RUN; then
-        echo "  [DRY] Would submit: sbatch $script $EXPERIMENT $SEED $EXTRA_ARGS"
+        echo "  [DRY] Would submit: sbatch $script $EXPERIMENT $SEED"
     else
-        job_id=$(sbatch --parsable "$script" "$EXPERIMENT" "$SEED" $EXTRA_ARGS)
+        job_id=$(sbatch --parsable "$script" "$EXPERIMENT" "$SEED")
         JOB_IDS+=("$job_id")
         echo "  [OK] $model - Job ID: $job_id"
     fi
