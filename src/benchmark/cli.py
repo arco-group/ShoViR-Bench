@@ -249,7 +249,7 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
 
         dataset = {}
         for category in valid_categories:
-            category_file = chexpert_dir / f"{category}_samples.json"
+            category_file = chexpert_dir / f"{category}_samples_filtered.json"
             if category_file.exists():
                 with category_file.open("r", encoding="utf-8") as f:
                     category_data = json.load(f)
