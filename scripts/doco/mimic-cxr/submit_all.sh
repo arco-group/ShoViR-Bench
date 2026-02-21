@@ -13,6 +13,7 @@ cd "$PROJECT_DIR"
 EXPERIMENT="doco_p20"
 SEED="3"
 DRY_RUN=false
+SKIP_EXISTING=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -20,12 +21,37 @@ while [[ $# -gt 0 ]]; do
         --experiment) EXPERIMENT="$2"; shift 2 ;;
         --seed) SEED="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
-        *) echo "Unknown argument: $1"; echo "Usage: $0 --experiment doco_pXX --seed N [--dry-run]"; exit 1 ;;
+        --skip-existing) SKIP_EXISTING=true; shift ;;
+        *) echo "Unknown argument: $1"; echo "Usage: $0 --experiment doco_pXX --seed N [--dry-run] [--skip-existing]"; exit 1 ;;
     esac
 done
 
 # Create log directory
 mkdir -p logs/doco
+
+# ---------------------------------------------------------------------------
+# Output-existence check (used by --skip-existing).
+# Maps model key -> search pattern inside output filenames.
+# nv_reason_cxr is special: CLI writes files named *nv_reason* not *nv_reason_cxr*.
+# ---------------------------------------------------------------------------
+declare -A _MODEL_PATTERN=(
+    ["medgemma"]="medgemma"   ["maira2"]="maira2"
+    ["chexagent"]="chexagent" ["chexone"]="chexone"
+    ["libra"]="libra"         ["cxrmateed"]="cxrmateed"
+    ["nv_reason_cxr"]="nv_reason"
+    ["radialog"]="radialog"   ["llavarad"]="llavarad"
+)
+_output_exists() {   # _output_exists <model> <experiment> <seed>
+    local model="$1" exp="$2" seed="${3:-3}"
+    local pat="${_MODEL_PATTERN[$model]:-$model}"
+    local dir
+    if [[ "$exp" =~ ^(oco|doco|roco|ro)_(.+)$ ]]; then
+        dir="outputs/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/mimic-cxr"
+    else
+        dir="outputs/${exp}/mimic-cxr"
+    fi
+    compgen -G "${dir}/*${pat}*::seed=${seed}.json" > /dev/null 2>&1
+}
 
 if $DRY_RUN; then
     echo "=== DRY RUN MODE ==="
@@ -68,6 +94,11 @@ for model in "${MODELS[@]}"; do
 
     if [[ ! -f "$script" ]]; then
         echo "  [SKIP] $model - script not found: $script"
+        continue
+    fi
+
+    if $SKIP_EXISTING && _output_exists "$model" "$EXPERIMENT" "$SEED"; then
+        echo "  [SKIP] $model - output already exists (${EXPERIMENT}, seed=${SEED})"
         continue
     fi
 
