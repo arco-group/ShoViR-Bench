@@ -71,7 +71,7 @@ MODELS=(
     "medgemma"
     "maira2"
     "chexagent"
-    "chexone"
+    #"chexone"
     "libra"
     "cxrmateed"
     "nv_reason_cxr"

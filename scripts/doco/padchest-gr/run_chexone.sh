@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 08:30:00
+#SBATCH -t 18:30:00
 #SBATCH --gpus-per-node=A40:1
 #SBATCH -J chexone_doco
 #SBATCH -o logs/doco/chexone_%j.out
