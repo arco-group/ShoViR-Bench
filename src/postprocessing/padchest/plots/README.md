@@ -4,6 +4,61 @@ Scripts for visualising evaluation results. All scripts live in `src/postprocess
 
 ---
 
+## `bar_plot_oco.py` -- Baseline vs OCO / DOCO / RO Bar Chart
+
+Compares model performance at maximum occlusion (`p=100`) across the three experiment types (OCO, DOCO, RO) against the unperturbed baseline (`p=0`). Metric is the mean CheXBERT F1 averaged over all present condition classes (NaN-safe).
+
+### Quick start
+
+```bash
+python src/postprocessing/padchest/plots/bar_plot_oco.py
+```
+
+### Input
+
+Reads directly from the project `results/` directory (no arguments needed):
+
+| Path | Used as |
+|------|---------|
+| `results/oco/p00/results.csv` | Baseline (unperturbed) |
+| `results/oco/p100/results.csv` | OCO at full occlusion |
+| `results/doco/p100/results.csv` | DOCO at full occlusion |
+| `results/ro/p100/results.csv` | RO at full occlusion |
+
+### Output
+
+Saved to `results/plots/`:
+- `barplot.pdf`
+- `barplot.png`
+
+---
+
+## `line_plot_p.py` -- Performance vs Perturbation Ratio
+
+Shows how mean CheXBERT F1 evolves as the perturbation ratio `p` increases from 0 % to 100 %, with one subplot per experiment type (OCO, DOCO, RO) and one line per model.
+
+### Quick start
+
+```bash
+python src/postprocessing/padchest/plots/line_plot_p.py
+```
+
+### Input
+
+Reads directly from the project `results/` directory (no arguments needed):
+
+| Path pattern | Description |
+|---|---|
+| `results/{oco,doco,ro}/p{00,20,40,60,80,100}/results.csv` | Per-class CheXBERT F1 at each perturbation level |
+
+### Output
+
+Saved to `results/plots/`:
+- `lineplot.pdf`
+- `lineplot.png`
+
+---
+
 ## `plot_ro.py` -- Random Occlusion Performance Curves
 
 Reads per-experiment results CSVs from `results/ro/pXX/results.csv` and produces one line plot per metric, with models as separate lines and occlusion percentage on the x-axis.

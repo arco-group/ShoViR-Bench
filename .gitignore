@@ -21,7 +21,7 @@ evaluation_metrics.bash
 job_*
 out_*
 /logs
-/other_codes
+other_codes
 results/
 .venv_eval/
 .venv_chexagent/

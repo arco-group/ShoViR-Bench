@@ -3,37 +3,33 @@
 #SBATCH -p alvis
 #SBATCH -t 12:00:00
 #SBATCH --gpus-per-node=A40:1
-#SBATCH -J eval_all
-#SBATCH -o logs/eval/eval_all_%j.out
-#SBATCH -e logs/eval/eval_all_%j.err
+#SBATCH -J eval_chexbert_class
+#SBATCH -o logs/eval/eval_chexbert_class_%j.out
+#SBATCH -e logs/eval/eval_chexbert_class_%j.err
 
-# Evaluate all model outputs under outputs/.
+# Evaluate model outputs under outputs/ with CheXbert per-target-category F1.
+# Only processes files from the doco, oco, and ro experiments.
 # Groups results by experiment and percentage level (pXX).
 #
 # Runner-specific flags:
 #   --dry-run              Preview commands without running
-#   --experiment <name>    Only evaluate files from this experiment (e.g. ro, baseline)
+#   --experiment <name>    Only evaluate files from this experiment (must be one of: doco, oco, ro)
 #   --parallel <N>         Max parallel evaluations (default: 4)
-#   --include-occlusion    Also include ro, doco, oco experiments (excluded by default)
 #
-# All run_eval.py flags are forwarded:
+# All run_eval_chexbert_class.py flags are forwarded:
 #   --output-mode          per-file (default) | per-experiment
-#   --scorers              Comma-separated scorers (default: CheXbert,F1-RadGraph,BLEU-1,BLEU-4,ROUGE-L)
+#   --uncertain-mode       rrg- (default) | rrg+
 #   --bootstrap-ci         Enable bootstrap confidence intervals
-#   --save-breakdowns      Save CheXbert breakdown CSVs
-#   --report-chexbert-f1   Save extra CheXbert detailed metrics CSV
-#   --run-name             W&B run name
-#   --compute-green        Compute GREEN metric
-#   --green-model-name     HuggingFace model name for GREEN
+#   --n-resamples          Number of bootstrap resamples (default: 500)
+#   --seed                 Random seed (default: 3)
 #   --skip-existing        Skip evaluation if results already exist (do not override)
 #
 # Usage:
-#   sbatch scripts/run_all_evals.sh                                    # run all (excl. ro/doco/oco), per-file
-#   sbatch scripts/run_all_evals.sh --include-occlusion                # include ro, doco, oco
-#   sbatch scripts/run_all_evals.sh --experiment ro                    # only ro experiment
-#   sbatch scripts/run_all_evals.sh --bootstrap-ci --save-breakdowns   # with CI + breakdowns
-#   bash   scripts/run_all_evals.sh --dry-run                          # preview
-#   bash   scripts/run_all_evals.sh --experiment baseline --dry-run
+#   sbatch scripts/run_all_evals_chexbert_class.sh                          # run doco+oco+ro, per-file
+#   sbatch scripts/run_all_evals_chexbert_class.sh --experiment ro          # only ro experiment
+#   sbatch scripts/run_all_evals_chexbert_class.sh --bootstrap-ci           # with CI
+#   bash   scripts/run_all_evals_chexbert_class.sh --dry-run                # preview
+#   bash   scripts/run_all_evals_chexbert_class.sh --experiment oco --dry-run
 
 set -euo pipefail
 
@@ -43,20 +39,13 @@ set -euo pipefail
 DRY_RUN=false
 FILTER_EXPERIMENT=""
 MAX_PARALLEL=4
-INCLUDE_OCCLUSION=false
 
-# Occlusion experiments excluded by default
-OCCLUSION_EXPERIMENTS=("ro" "doco" "oco")
-
-# run_eval.py arguments (with defaults matching run_eval.py)
+# run_eval_chexbert_class.py arguments (with defaults matching the script)
 OUTPUT_MODE="per-file"
-SCORERS="CheXbert,F1-RadGraph,BLEU-1,BLEU-4,ROUGE-L"
+UNCERTAIN_MODE="rrg-"
 BOOTSTRAP_CI=false
-SAVE_BREAKDOWNS=false
-REPORT_CHEXBERT_F1=false
-RUN_NAME="mimic_cxr_eval"
-COMPUTE_GREEN=false
-GREEN_MODEL_NAME="StanfordAIMI/GREEN-radllama2-7b"
+N_RESAMPLES=500
+SEED=3
 SKIP_EXISTING=false
 
 while [[ $# -gt 0 ]]; do
@@ -65,17 +54,13 @@ while [[ $# -gt 0 ]]; do
         --dry-run)            DRY_RUN=true; shift ;;
         --experiment)         FILTER_EXPERIMENT="$2"; shift 2 ;;
         --parallel)           MAX_PARALLEL="$2"; shift 2 ;;
-        --include-occlusion)  INCLUDE_OCCLUSION=true; shift ;;
-        # run_eval.py flags (with value)
+        # run_eval_chexbert_class.py flags (with value)
         --output-mode)        OUTPUT_MODE="$2"; shift 2 ;;
-        --scorers)            SCORERS="$2"; shift 2 ;;
-        --run-name)           RUN_NAME="$2"; shift 2 ;;
-        --green-model-name)   GREEN_MODEL_NAME="$2"; shift 2 ;;
-        # run_eval.py boolean flags
+        --uncertain-mode)     UNCERTAIN_MODE="$2"; shift 2 ;;
+        --n-resamples)        N_RESAMPLES="$2"; shift 2 ;;
+        --seed)               SEED="$2"; shift 2 ;;
+        # run_eval_chexbert_class.py boolean flags
         --bootstrap-ci)       BOOTSTRAP_CI=true; shift ;;
-        --save-breakdowns)    SAVE_BREAKDOWNS=true; shift ;;
-        --report-chexbert-f1) REPORT_CHEXBERT_F1=true; shift ;;
-        --compute-green)      COMPUTE_GREEN=true; shift ;;
         --skip-existing)      SKIP_EXISTING=true; shift ;;
         *)
             echo "Unknown argument: $1"
@@ -84,13 +69,22 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Build the eval args string forwarded to run_eval.py
-EVAL_ARGS="--output-mode ${OUTPUT_MODE} --scorers ${SCORERS} --run-name ${RUN_NAME} --green-model-name ${GREEN_MODEL_NAME}"
-$BOOTSTRAP_CI       && EVAL_ARGS="${EVAL_ARGS} --bootstrap-ci"
-$SAVE_BREAKDOWNS    && EVAL_ARGS="${EVAL_ARGS} --save-breakdowns"
-$REPORT_CHEXBERT_F1 && EVAL_ARGS="${EVAL_ARGS} --report-chexbert-f1"
-$COMPUTE_GREEN      && EVAL_ARGS="${EVAL_ARGS} --compute-green"
-$SKIP_EXISTING      && EVAL_ARGS="${EVAL_ARGS} --skip-existing"
+# Validate --experiment if provided
+ALLOWED_EXPERIMENTS=("doco" "oco" "ro")
+if [[ -n "$FILTER_EXPERIMENT" ]]; then
+    valid=false
+    for exp in "${ALLOWED_EXPERIMENTS[@]}"; do
+        [[ "$FILTER_EXPERIMENT" == "$exp" ]] && valid=true && break
+    done
+    if ! $valid; then
+        echo "Error: --experiment must be one of: ${ALLOWED_EXPERIMENTS[*]}"
+        exit 1
+    fi
+fi
+
+# Build the eval args string forwarded to run_eval_chexbert_class.py
+EVAL_ARGS="--output-mode ${OUTPUT_MODE} --uncertain-mode ${UNCERTAIN_MODE} --n-resamples ${N_RESAMPLES} --seed ${SEED}"
+$BOOTSTRAP_CI    && EVAL_ARGS="${EVAL_ARGS} --bootstrap-ci"
 
 # ---------------------
 # Setup
@@ -119,6 +113,7 @@ export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
 export HF_HOME="${PROJECT_DIR}/.models_cache"
 
 
+
 OUTPUTS_DIR="outputs"
 
 if [[ ! -d "${OUTPUTS_DIR}" ]]; then
@@ -127,12 +122,11 @@ if [[ ! -d "${OUTPUTS_DIR}" ]]; then
 fi
 
 echo "============================================"
-echo "  Evaluation Multi-Runner"
+echo "  CheXbert Per-Class Evaluation Multi-Runner"
 echo "============================================"
 echo "Project:       ${PROJECT_DIR}"
 echo "Outputs dir:   ${OUTPUTS_DIR}"
-echo "Filter:        ${FILTER_EXPERIMENT:-all}"
-echo "Occlusion:     ${INCLUDE_OCCLUSION} (ro/doco/oco)"
+echo "Experiments:   ${FILTER_EXPERIMENT:-doco+oco+ro}"
 echo "Parallel:      ${MAX_PARALLEL}"
 echo "Dry run:       ${DRY_RUN}"
 echo ""
@@ -147,36 +141,38 @@ echo ""
 TOTAL=0
 DONE=0
 FAILED=0
-SKIPPED=0
 
 # Collect all JSON files, sorted for reproducible ordering
 mapfile -t ALL_FILES < <(find "${OUTPUTS_DIR}" -name "*.json" -type f | sort)
 
-# Filter by experiment if requested
-if [[ -n "$FILTER_EXPERIMENT" ]]; then
-    FILTERED=()
+# Filter to only doco, oco, ro experiments (and optionally a single one)
+FILTERED=()
+for f in "${ALL_FILES[@]}"; do
+    exp=$(echo "${f#${OUTPUTS_DIR}/}" | cut -d'/' -f1)
+    if [[ -n "$FILTER_EXPERIMENT" ]]; then
+        [[ "$exp" == "$FILTER_EXPERIMENT" ]] && FILTERED+=("$f")
+    else
+        for allowed in "${ALLOWED_EXPERIMENTS[@]}"; do
+            [[ "$exp" == "$allowed" ]] && FILTERED+=("$f") && break
+        done
+    fi
+done
+ALL_FILES=("${FILTERED[@]}")
+
+# Skip existing results if requested
+if $SKIP_EXISTING; then
+    AFTER_SKIP=()
     for f in "${ALL_FILES[@]}"; do
-        # experiment is the first directory component after outputs/
-        exp=$(echo "$f" | sed "s|^${OUTPUTS_DIR}/||" | cut -d'/' -f1)
-        if [[ "$exp" == "$FILTER_EXPERIMENT" ]]; then
-            FILTERED+=("$f")
+        rel="${f#${OUTPUTS_DIR}/}"
+        base_no_ext="${rel%.json}"
+        result_csv="results/${base_no_ext}.csv"
+        if [[ -f "$result_csv" ]]; then
+            echo "[SKIP] ${result_csv} already exists."
+        else
+            AFTER_SKIP+=("$f")
         fi
     done
-    ALL_FILES=("${FILTERED[@]}")
-fi
-
-# Exclude occlusion experiments (ro, doco, oco) unless --include-occlusion is set
-if ! $INCLUDE_OCCLUSION; then
-    FILTERED=()
-    for f in "${ALL_FILES[@]}"; do
-        exp=$(echo "${f#${OUTPUTS_DIR}/}" | cut -d'/' -f1)
-        is_occlusion=false
-        for occ in "${OCCLUSION_EXPERIMENTS[@]}"; do
-            [[ "$exp" == "$occ" ]] && is_occlusion=true && break
-        done
-        $is_occlusion || FILTERED+=("$f")
-    done
-    ALL_FILES=("${FILTERED[@]}")
+    ALL_FILES=("${AFTER_SKIP[@]}")
 fi
 
 TOTAL=${#ALL_FILES[@]}
@@ -189,11 +185,6 @@ echo ""
 declare -A GROUP_COUNTS
 for f in "${ALL_FILES[@]}"; do
     rel="${f#${OUTPUTS_DIR}/}"
-    # Extract group: experiment or experiment/pXX
-    # Path patterns:
-    #   baseline/padchest-gr/file.json        -> baseline
-    #   ro/p20/padchest-gr/file.json          -> ro/p20
-    #   all_noise/padchest-gr/file.json       -> all_noise
     exp=$(echo "$rel" | cut -d'/' -f1)
     second=$(echo "$rel" | cut -d'/' -f2)
 
@@ -230,9 +221,9 @@ wait_for_slot() {
 # run_one_eval: run a single evaluation in the background, write exit status to a file
 run_one_eval() {
     local idx="$1" filepath="$2"
-    local logfile="${LOG_DIR}/eval_${idx}.log"
+    local logfile="${LOG_DIR}/eval_chexbert_class_${idx}.log"
 
-    if python evaluations/run_eval.py \
+    if python evaluations/run_eval_chexbert_class.py \
         --filepath "$filepath" \
         ${EVAL_ARGS} \
         > "$logfile" 2>&1; then
@@ -265,11 +256,11 @@ for f in "${ALL_FILES[@]}"; do
     filename=$(basename "$f")
 
     if $DRY_RUN; then
-        echo "[${DONE}/${TOTAL}] ${filename} [DRY-RUN] python evaluations/run_eval.py --filepath ${f} ${EVAL_ARGS}"
+        echo "[${DONE}/${TOTAL}] ${filename} [DRY-RUN] python evaluations/run_eval_chexbert_class.py --filepath ${f} ${EVAL_ARGS}"
         continue
     fi
 
-    echo "[${DONE}/${TOTAL}] ${filename} -> logs/eval/eval_${DONE}.log"
+    echo "[${DONE}/${TOTAL}] ${filename} -> logs/eval/eval_chexbert_class_${DONE}.log"
 
     wait_for_slot
     run_one_eval "$DONE" "$f" &
@@ -286,7 +277,7 @@ for status_file in "${STATUS_DIR}"/*; do
     if [[ "$(cat "$status_file")" != "0" ]]; then
         idx=$(basename "$status_file")
         FAILED=$((FAILED + 1))
-        echo "FAILED: eval_${idx}.log"
+        echo "FAILED: eval_chexbert_class_${idx}.log"
     fi
 done
 rm -rf "$STATUS_DIR"
@@ -303,14 +294,13 @@ echo "Parallel:      ${MAX_PARALLEL}"
 echo "Succeeded:     $((TOTAL - FAILED))"
 echo "Failed:        ${FAILED}"
 echo "End time:      $(date)"
-echo "Per-file logs: ${LOG_DIR}/eval_<N>.log"
+echo "Per-file logs: ${LOG_DIR}/eval_chexbert_class_<N>.log"
 echo "============================================"
 
 if [[ $FAILED -gt 0 ]]; then
     echo ""
     echo "WARNING: ${FAILED} evaluations failed. Inspect individual logs:"
-    for status_file_path in "${LOG_DIR}"/eval_*.log; do
-        # Show logs that ended with a traceback
+    for status_file_path in "${LOG_DIR}"/eval_chexbert_class_*.log; do
         if grep -q "Traceback\|Error\|FAILED" "$status_file_path" 2>/dev/null; then
             echo "  - $status_file_path"
         fi
