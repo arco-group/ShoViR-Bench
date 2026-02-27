@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Radiology report generation evaluation script.
 
@@ -39,7 +40,6 @@ Expected JSON format:
   ...
 ]
 """
-
 from __future__ import annotations
 
 from typing import List, Dict, Any, Callable, Optional
@@ -65,16 +65,12 @@ try:
     import wandb
 except ImportError:
     wandb = None
-
-
+import sys
+sys.path.insert(0, "GREEN")
 # GREEN is optional; import only if requested.
-def _try_import_green():
-    try:
-        from green_score import GREEN  # type: ignore
-        return GREEN
-    except Exception:
-        return None
 
+from green_score import GREEN  # type: ignore
+        
 
 # -----------------------------
 # Reproducibility
@@ -449,13 +445,6 @@ def compute_green_metric(
     """
     Compute GREEN metric and return only mean and std.
     """
-    GREEN = _try_import_green()
-    if GREEN is None:
-        raise ImportError(
-            "GREEN is not available. Make sure 'green_score' is installed and importable "
-            "(e.g., the GREEN submodule/package is in PYTHONPATH)."
-        )
-
     green_scorer = GREEN(model_name, output_dir=str(output_dir))
     mean, std, _green_score_list, _summary, _result_df = green_scorer(refs, hyps)
     return {"GREEN_mean": float(mean), "GREEN_std": float(std)}

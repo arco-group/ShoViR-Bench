@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 12:00:00
+#SBATCH -t 22:00:00
 #SBATCH --gpus-per-node=A40:1
 #SBATCH -J eval_all
 #SBATCH -o logs/eval/eval_all_%j.out
@@ -100,6 +100,11 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # Under SLURM, SLURM_SUBMIT_DIR is more reliable than BASH_SOURCE resolution
 if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
     PROJECT_DIR="${SLURM_SUBMIT_DIR}"
+fi
+# Sanity check: OOD terminals may resolve BASH_SOURCE to /var/www/ood/...
+# Fall back to PWD if the derived path does not contain the project layout.
+if [[ ! -d "${PROJECT_DIR}/evaluations" ]]; then
+    PROJECT_DIR="$PWD"
 fi
 cd "$PROJECT_DIR"
 

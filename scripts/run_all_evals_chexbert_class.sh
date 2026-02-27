@@ -89,13 +89,7 @@ $BOOTSTRAP_CI    && EVAL_ARGS="${EVAL_ARGS} --bootstrap-ci"
 # ---------------------
 # Setup
 # ---------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-# Under SLURM, SLURM_SUBMIT_DIR is more reliable than BASH_SOURCE resolution
-if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
-    PROJECT_DIR="${SLURM_SUBMIT_DIR}"
-fi
-cd "$PROJECT_DIR"
+PROJECT_DIR="$(pwd)"
 
 # Load module and venv
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then

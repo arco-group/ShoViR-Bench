@@ -132,7 +132,11 @@ def run_inference(
     num_images = config.num_images
     total_samples = len(dataset)
 
-    with tempfile.TemporaryDirectory(prefix="benchmark_cache_") as cache_dir:
+    # Use the output directory as the temp cache location to avoid filling /tmp
+    # (compute node /tmp is a small tmpfs; preprocessed images can be ~25 MB each).
+    cache_base = config.output_path.parent
+    cache_base.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="benchmark_cache_", dir=cache_base) as cache_dir:
 
         # ── Phase 1: preprocess & cache to disk (multiprocessing) ──
         max_items = config.max_images if config.max_images is not None else total_samples
