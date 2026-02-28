@@ -7,6 +7,7 @@ Each model has a fixed color and marker that is consistent across both datasets.
 
 Output: results/plots/lineplot.{pdf,png}
 """
+import json
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
@@ -84,8 +85,39 @@ DS_LABEL = {
 
 SKIP_STEMS  = {'microsoft__maira-2_maira2_default::seed=3_grounded'}
 
+# ── WEIGHTED MEAN HELPERS ────────────────────────────────────────────
+_WEIGHTS_JSON = Path(__file__).resolve().parent / 'weights.json'
+with open(_WEIGHTS_JSON) as _f:
+    _RAW_WEIGHTS = json.load(_f)
+
+_DS_KEY = {'padchest-gr': 'padchest', 'mimic-cxr-jpg': 'mimic'}
+
+
+def _weighted_f1(row: pd.Series, dataset: str, exp_type: str) -> float:
+    """
+    Weighted mean of CheXBERT F1 across disease columns.
+    Weights are the positive-sample counts from weights.json for the
+    given dataset and experiment type.  Classes absent from the weights
+    file are ignored; falls back to nanmean if no weights match.
+    """
+    raw = _RAW_WEIGHTS.get(_DS_KEY.get(dataset, dataset), {}).get(exp_type, {})
+    wts = {k.replace('_', ' '): float(v) for k, v in raw.items()}
+    vals, ws = [], []
+    for col in row.index:
+        w = wts.get(col)
+        if w is None:
+            continue
+        v = pd.to_numeric(row[col], errors='coerce')
+        if np.isnan(v):
+            continue
+        vals.append(v)
+        ws.append(w)
+    if not vals:
+        return float(np.nanmean(row.values.astype(float)))
+    return float(np.average(vals, weights=ws))
+
 DATASETS    = [('padchest-gr', 'PadChest-GR'), ('mimic-cxr-jpg', 'MIMIC-CXR')]
-EXPERIMENTS = ['oco', 'doco', 'ro']
+EXPERIMENTS = ['ro', 'oco', 'doco']
 EXP_TITLES  = {'oco': 'OCO', 'doco': 'DOCO', 'ro': 'RO'}
 P_VALUES    = [0, 20, 40, 60, 80, 100]
 
@@ -107,7 +139,7 @@ def load_experiment(experiment: str, dataset: str) -> dict:
             if csv_path.stem in SKIP_STEMS:
                 continue
             short   = NAME_MAP.get(csv_path.stem, csv_path.stem)
-            mean_f1 = float(np.nanmean(df.loc['CheXbert F1 score'].values.astype(float)))
+            mean_f1 = _weighted_f1(df.loc['CheXbert F1 score'], dataset, experiment)
             if p not in data[short]:
                 data[short][p] = mean_f1
     return data

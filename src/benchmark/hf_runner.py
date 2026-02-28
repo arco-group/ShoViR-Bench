@@ -160,7 +160,7 @@ def run_inference(
 
         entries: List[Tuple[int, str, str, list, str]] = []
         with mp_ctx.Pool(
-            processes=load_workers,
+            processes=1,
             initializer=_init_mp_worker,
             initargs=(config.experiment, cache_dir, config.seed),
         ) as pool:

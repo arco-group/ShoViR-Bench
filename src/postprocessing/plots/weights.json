@@ -1,0 +1,83 @@
+{"mimic":
+    {
+    "oco": {
+    "Atelectasis": 689,
+    "Cardiomegaly": 843,
+    "Consolidation": 118,
+    "Edema": 435,
+    "Enlarged Cardiomediastinum": 123,
+    "Fracture": 28,
+    "Lung Lesion": 134,
+    "Lung Opacity": 949,
+    "Pleural Effusion": 814,
+    "Pleural Other": 71,
+    "Pneumonia": 122,
+    "Pneumothorax": 55,
+    "Support Devices": 786
+    }   ,
+    "doco": {
+    "Atelectasis": 689,
+    "Cardiomegaly": 843,
+    "Consolidation": 118,
+    "Edema": 435,
+    "Enlarged Cardiomediastinum": 123,
+    "Fracture": 28,
+    "Lung Lesion": 134,
+    "Lung Opacity": 949,
+    "Pleural Effusion": 814,
+    "Pleural Other": 71,
+    "Pneumonia": 122,
+    "Pneumothorax": 55,
+    "Support Devices": 786
+    }, 
+    "ro": {
+    "Atelectasis": 689,
+    "Cardiomegaly": 843,
+    "Consolidation": 118,
+    "Edema": 435,
+    "Enlarged Cardiomediastinum": 123,
+    "Fracture": 28,
+    "Lung Lesion": 134,
+    "Lung Opacity": 949,
+    "Pleural Effusion": 814,
+    "Pleural Other": 71,
+    "Pneumonia": 122,
+    "Pneumothorax": 55,
+    "Support Devices": 786
+}
+},
+ "padchest":
+    {
+    "oco": {
+        "Atelectasis" :  232,
+        "Cardiomegaly" :  314,
+        "Fracture" :  141,
+        "Lung_Lesion" :  146,
+        "Lung_Opacity" :  342,
+        "Pleural_Effusion" :  186,
+        "Pleural_Other" :  183,
+        "Support_Devices" :  270
+        },
+    
+    "doco": 
+          {"Atelectasis": 84, 
+          "Cardiomegaly": 95, 
+          "Fracture": 43, 
+          "Lung_Lesion": 37, 
+          "Lung_Opacity": 123, 
+          "Pleural_Effusion": 104, 
+          "Pleural_Other": 48, 
+          "Support_Devices": 129}
+    , 
+    "ro": {
+        "Atelectasis" :  232,
+        "Cardiomegaly" :  314,
+        "Fracture" :  141,
+        "Lung_Lesion" :  146,
+        "Lung_Opacity" :  342,
+        "Pleural_Effusion" :  186,
+        "Pleural_Other" :  183,
+        "Support_Devices" :  270
+        }
+    }
+}

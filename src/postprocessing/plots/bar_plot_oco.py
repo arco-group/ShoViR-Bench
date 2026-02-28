@@ -7,6 +7,7 @@ Data loaded from per-file CSVs (one CSV per model per experiment level).
 
 Output: results/plots/barplot.{pdf,png}
 """
+import json
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
@@ -70,6 +71,39 @@ DS_LABEL = {
 
 SKIP_STEMS = {'microsoft__maira-2_maira2_default::seed=3_grounded'}
 
+# ── WEIGHTED MEAN HELPERS ────────────────────────────────────────────
+_WEIGHTS_JSON = Path(__file__).resolve().parent / 'weights.json'
+with open(_WEIGHTS_JSON) as _f:
+    _RAW_WEIGHTS = json.load(_f)
+
+# dataset key normalisation: results-dir name → weights.json top-level key
+_DS_KEY  = {'padchest-gr': 'padchest', 'mimic-cxr-jpg': 'mimic'}
+
+
+def _weighted_f1(row: pd.Series, dataset: str, exp_type: str) -> float:
+    """
+    Weighted mean of CheXBERT F1 across disease columns.
+    Weights are the positive-sample counts from weights.json for the
+    given dataset and experiment type.  Classes absent from the weights
+    file are ignored; falls back to nanmean if no weights match.
+    """
+    raw = _RAW_WEIGHTS.get(_DS_KEY.get(dataset, dataset), {}).get(exp_type, {})
+    # normalise key separators: weights.json uses both spaces and underscores
+    wts = {k.replace('_', ' '): float(v) for k, v in raw.items()}
+    vals, ws = [], []
+    for col in row.index:
+        w = wts.get(col)
+        if w is None:
+            continue
+        v = pd.to_numeric(row[col], errors='coerce')
+        if np.isnan(v):
+            continue
+        vals.append(v)
+        ws.append(w)
+    if not vals:
+        return float(np.nanmean(row.values.astype(float)))
+    return float(np.average(vals, weights=ws))
+
 DATASETS = [
     ('padchest-gr',   'PadChest-GR'),
     ('mimic-cxr-jpg', 'MIMIC-CXR'),
@@ -85,7 +119,7 @@ COLORS = ['#CCBB44', '#EE6677', '#4477AA', '#228833']
 
 # ── DATA LOADING ────────────────────────────────────────────────────
 def load_mean_f1_dir(exp_type: str, p_str: str, dataset: str) -> dict[str, float]:
-    """Scan per-file CSVs → {model_short: mean CheXBERT F1 across diseases}."""
+    """Scan per-file CSVs → {model_short: weighted CheXBERT F1 across diseases}."""
     exp_dir = RESULTS_DIR / exp_type / p_str / dataset
     out = {}
     for csv_path in sorted(exp_dir.glob('*.csv')):
@@ -99,7 +133,7 @@ def load_mean_f1_dir(exp_type: str, p_str: str, dataset: str) -> dict[str, float
             continue
         short = NAME_MAP.get(csv_path.stem, csv_path.stem)
         if short not in out:
-            out[short] = float(np.nanmean(df.loc['CheXbert F1 score'].values.astype(float)))
+            out[short] = _weighted_f1(df.loc['CheXbert F1 score'], dataset, exp_type)
     return out
 
 

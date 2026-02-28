@@ -4,40 +4,40 @@
     "A": {
       "_panel": "Panel A \u2014 Prevalence vs. Direct Grounding (OCO)",
       "Enl. Card.": [
-        20,
-        4
+        10,
+        10
       ],
       "Cardiomegaly": [
-        -60,
-        14
+        10,
+        10
       ],
       "Lung Opacity": [
-        -45,
-        20
+        10,
+        10
       ],
       "Lung Lesion": [
         10,
-        1
+        10
       ],
       "Edema": [
         10,
-        4
+        10
       ],
       "Consolidation": [
-        -36,
-        14
+        10,
+        10
       ],
       "Pneumonia": [
-        14,
-        -6
+        10,
+        10
       ],
       "Atelectasis": [
-        -4,
-        -18
+        10,
+        10
       ],
       "Pneumothorax": [
-        18,
-        4
+        10,
+        10
       ],
       "Pleural Eff.": [
         10,
@@ -45,125 +45,70 @@
       ],
       "Pleural Other": [
         10,
-        -6
+        10
       ],
       "Fracture": [
-        -40,
-        8
+        10,
+        10
       ],
       "Support Dev.": [
-        -30,
-        12
+        10,
+        10
       ]
     },
     "B": {
       "_panel": "Panel B \u2014 Prevalence vs. Baseline Performance",
       "Enl. Card.": [
-        16,
-        -4
-      ],
-      "Cardiomegaly": [
-        -76,
-        -16
-      ],
-      "Lung Opacity": [
-        -48,
-        8
-      ],
-      "Lung Lesion": [
         10,
-        0
-      ],
-      "Edema": [
-        10,
-        4
-      ],
-      "Consolidation": [
-        -36,
-        30
-      ],
-      "Pneumonia": [
-        20,
-        -24
-      ],
-      "Atelectasis": [
-        2,
-        -14
-      ],
-      "Pneumothorax": [
-        10,
-        -4
-      ],
-      "Pleural Eff.": [
-        -60,
         10
       ],
-      "Pleural Other": [
-        0,
-        -30
-      ],
-      "Fracture": [
-        20,
-        -20
-      ],
-      "Support Dev.": [
-        -18,
-        12
-      ]
-    },
-    "C": {
-      "_panel": "Panel C \u2014 Direct vs. Indirect Grounding",
-      "Enl. Card.": [
-        10,
-        6
-      ],
       "Cardiomegaly": [
         10,
-        -12
+        10
       ],
       "Lung Opacity": [
-        14,
-        -8
+        10,
+        10
       ],
       "Lung Lesion": [
-        -20,
-        14
+        10,
+        10
       ],
       "Edema": [
-        0,
-        -16
+        10,
+        10
       ],
       "Consolidation": [
-        8,
+        10,
         10
       ],
       "Pneumonia": [
         10,
-        -24
+        10
       ],
       "Atelectasis": [
-        -40,
+        10,
         10
       ],
       "Pneumothorax": [
-        -50,
-        30
+        10,
+        10
       ],
       "Pleural Eff.": [
-        -54,
-        -24
+        10,
+        10
       ],
       "Pleural Other": [
-        -60,
-        14
+        10,
+        10
       ],
       "Fracture": [
-        -10,
+        10,
         10
       ],
       "Support Dev.": [
         10,
-        20
+        10
       ]
     }
   },
@@ -175,16 +120,16 @@
         4
       ],
       "Cardiomegaly": [
-        -24,
-        -18
+        10,
+        -14
       ],
       "Lung Opacity": [
-        -50,
-        14
+        10,
+        4
       ],
       "Lung Lesion": [
-        12,
-        0
+        10,
+        -12
       ],
       "Edema": [
         10,
@@ -199,28 +144,28 @@
         4
       ],
       "Atelectasis": [
-        -55,
-        10
+        10,
+        -12
       ],
       "Pneumothorax": [
         10,
         4
       ],
       "Pleural Eff.": [
-        10,
-        10
+        -55,
+        6
       ],
       "Pleural Other": [
         10,
         4
       ],
       "Fracture": [
-        10,
-        10
+        -65,
+        -8
       ],
       "Support Dev.": [
-        -30,
-        18
+        10,
+        4
       ]
     },
     "B": {
@@ -230,16 +175,16 @@
         4
       ],
       "Cardiomegaly": [
-        -90,
+        10,
         -14
       ],
       "Lung Opacity": [
-        -55,
-        10
+        10,
+        4
       ],
       "Lung Lesion": [
         10,
-        -6
+        -12
       ],
       "Edema": [
         10,
@@ -254,8 +199,8 @@
         4
       ],
       "Atelectasis": [
-        4,
-        -14
+        10,
+        4
       ],
       "Pneumothorax": [
         10,
@@ -267,70 +212,15 @@
       ],
       "Pleural Other": [
         10,
-        -8
+        4
       ],
       "Fracture": [
-        -24,
-        10
-      ],
-      "Support Dev.": [
-        -50,
-        -18
-      ]
-    },
-    "C": {
-      "_panel": "Panel C \u2014 Direct vs. Indirect Grounding",
-      "Enl. Card.": [
         -65,
-        4
-      ],
-      "Cardiomegaly": [
-        -50,
-        12
-      ],
-      "Lung Opacity": [
-        10,
-        4
-      ],
-      "Lung Lesion": [
-        10,
-        -12
-      ],
-      "Edema": [
-        10,
-        -12
-      ],
-      "Consolidation": [
-        10,
         -8
-      ],
-      "Pneumonia": [
-        -65,
-        4
-      ],
-      "Atelectasis": [
-        14,
-        -10
-      ],
-      "Pneumothorax": [
-        10,
-        4
-      ],
-      "Pleural Eff.": [
-        -46,
-        -18
-      ],
-      "Pleural Other": [
-        -30,
-        14
-      ],
-      "Fracture": [
-        4,
-        12
       ],
       "Support Dev.": [
         10,
-        4
+        -12
       ]
     }
   }
