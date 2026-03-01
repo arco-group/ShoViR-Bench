@@ -96,8 +96,11 @@ def _compute_flops_macs(model_instance, image: Image.Image, prompt: str) -> dict
     """
     import torch
 
-    # Prepare inputs for a single image
-    _, _, inputs, _ = model_instance.prepare_inputs(image, prompt)
+    # Prepare inputs for a single image.
+    # Index positionally: base returns (model, processor, inputs, input_len),
+    # Libra returns (model, tokenizer, inputs, input_len, stop_str) — 5 values.
+    prepared = model_instance.prepare_inputs(image, prompt)
+    inputs = prepared[2]
     raw_model = model_instance._model
     raw_model.eval()
     fwd_inputs = _filter_forward_kwargs(raw_model, dict(inputs))
