@@ -14,6 +14,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from .config import BenchmarkConfig
+from .io import get_tmp_dir
 from .models import MODEL_CLASSES, MODEL_SPECS
 from .prompts import PROMPTS
 from .preprocess import _resolve_preprocess
@@ -132,10 +133,9 @@ def run_inference(
     num_images = config.num_images
     total_samples = len(dataset)
 
-    # Use the output directory as the temp cache location to avoid filling /tmp
-    # (compute node /tmp is a small tmpfs; preprocessed images can be ~25 MB each).
-    cache_base = config.output_path.parent
-    cache_base.mkdir(parents=True, exist_ok=True)
+    # Use $TMPDIR (set by SLURM per job) when available; fall back to ./.tmp.
+    # This avoids filling the small shared /tmp tmpfs on compute nodes.
+    cache_base = get_tmp_dir()
     with tempfile.TemporaryDirectory(prefix="benchmark_cache_", dir=cache_base) as cache_dir:
 
         # ── Phase 1: preprocess & cache to disk (multiprocessing) ──
@@ -160,7 +160,7 @@ def run_inference(
 
         entries: List[Tuple[int, str, str, list, str]] = []
         with mp_ctx.Pool(
-            processes=1,
+            processes=load_workers,
             initializer=_init_mp_worker,
             initargs=(config.experiment, cache_dir, config.seed),
         ) as pool:

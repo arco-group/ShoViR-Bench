@@ -6,6 +6,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ..base import BaseHFLM
 from ..spec import ModelSpec
+from ...io import get_tmp_dir
 
 
 class CheXagent(BaseHFLM):
@@ -50,7 +51,7 @@ class CheXagent(BaseHFLM):
             return image
 
         if isinstance(image, Image.Image):
-            fd, path = tempfile.mkstemp(suffix=".jpg")
+            fd, path = tempfile.mkstemp(suffix=".jpg", dir=get_tmp_dir())
             os.close(fd)
             image.save(path, format="JPEG")
             return path
