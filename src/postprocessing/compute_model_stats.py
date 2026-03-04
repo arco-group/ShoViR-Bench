@@ -53,6 +53,72 @@ NAME_MAP: dict[str, str] = {
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _math_sdp_context():
+    """Return a context manager that forces PyTorch to use the math (non-Flash)
+    SDPA kernel so that FlopCounterMode can instrument attention operations.
+
+    Flash / mem-efficient attention uses custom CUDA kernels that FlopCounterMode
+    cannot count; switching to the math backend makes every attention call a
+    plain sequence of matmuls/softmaxes that the counter handles correctly.
+
+    Tries the PyTorch ≥ 2.3 API first, then the 2.0–2.2 deprecated API,
+    then falls back to a no-op context so the rest of the code is unaffected.
+    """
+    import contextlib
+    try:
+        from torch.nn.attention import SDPBackend, sdpa_kernel  # type: ignore
+        return sdpa_kernel([SDPBackend.MATH])
+    except Exception:
+        pass
+    try:
+        import torch
+        return torch.backends.cuda.sdp_kernel(  # type: ignore[attr-defined]
+            enable_flash=False, enable_math=True, enable_mem_efficient=False
+        )
+    except Exception:
+        return contextlib.nullcontext()
+
+class _ProfilerFlopCounter:
+    """Drop-in for FlopCounterMode when torch.utils.flop_counter is unavailable
+    (PyTorch < 2.1).  Uses torch.profiler with with_flops=True instead."""
+
+    def __init__(self):
+        self._total_flops: int = 0
+        self._prof = None
+
+    def __enter__(self):
+        import torch
+        from torch.profiler import profile, ProfilerActivity  # type: ignore
+        self._prof = profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            with_flops=True,
+        )
+        self._prof.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self._prof.__exit__(*args)
+        self._total_flops = sum(
+            int(evt.flops) for evt in self._prof.key_averages() if evt.flops
+        )
+
+    def get_total_flops(self) -> int:
+        return self._total_flops
+
+
+def _flop_counter():
+    """Return FlopCounterMode (PyTorch ≥ 2.1) or _ProfilerFlopCounter (< 2.1).
+
+    Both expose the same interface: use as a context manager, then call
+    .get_total_flops() after the block.
+    """
+    try:
+        from torch.utils.flop_counter import FlopCounterMode  # type: ignore
+        return FlopCounterMode(display=False)
+    except (ImportError, ModuleNotFoundError):
+        return _ProfilerFlopCounter()
+
+
 def _make_synthetic_images(n: int, size: tuple[int, int] = (512, 512)) -> list[Image.Image]:
     """Generate n random grayscale images (uint8, simulating CXR)."""
     rng = np.random.default_rng(42)
@@ -96,51 +162,249 @@ def _compute_flops_macs(model_instance, image: Image.Image, prompt: str) -> dict
     """
     import torch
 
+    raw_model = model_instance._model
+    raw_model.eval()
+
     # Prepare inputs for a single image.
     # Index positionally: base returns (model, processor, inputs, input_len),
     # Libra returns (model, tokenizer, inputs, input_len, stop_str) — 5 values.
-    prepared = model_instance.prepare_inputs(image, prompt)
-    inputs = prepared[2]
-    raw_model = model_instance._model
-    raw_model.eval()
-    fwd_inputs = _filter_forward_kwargs(raw_model, dict(inputs))
+    # Non-standard models (e.g. CXRMate) may fail prepare_inputs entirely;
+    # in that case skip directly to the 2·N·L approximation.
+    try:
+        prepared = model_instance.prepare_inputs(image, prompt)
+        inputs = prepared[2]
+        fwd_inputs = _filter_forward_kwargs(raw_model, dict(inputs))
+    except Exception as exc:
+        print(f"  [prepare_inputs] failed ({exc}); trying processor-based fallback.")
+        fwd_inputs = None
+
+    # Fallback for models whose processor is a torchvision Transform (e.g. CXRMate):
+    # apply it directly to get pixel_values, then build a minimal forward dict.
+    if fwd_inputs is None:
+        try:
+            import torch
+            proc = model_instance._processor
+            if proc is not None and callable(proc):
+                pixel_values = proc(image)                      # (C, H, W)
+                # CXRMate forward expects (B=1, S=1, C, H, W)
+                if pixel_values.dim() == 3:
+                    pixel_values = pixel_values.unsqueeze(0).unsqueeze(0)
+                device = next(raw_model.parameters()).device
+                raw_fwd = {"pixel_values": pixel_values.to(device)}
+
+                # Encoder-decoder models (e.g. CXRMate) also need decoder_input_ids
+                # and decoder_attention_mask for a single forward step; without the
+                # mask, some models produce a None attention bias that causes
+                # FlopCounterMode to crash on '.dtype'.
+                cfg = getattr(raw_model, "config", None)
+                if cfg is not None and getattr(cfg, "is_encoder_decoder", False):
+                    start_id = (
+                        getattr(cfg, "decoder_start_token_id", None)
+                        or getattr(cfg, "bos_token_id", None)
+                        or 0
+                    )
+                    raw_fwd["decoder_input_ids"] = torch.tensor([[start_id]], device=device)
+                    raw_fwd["decoder_attention_mask"] = torch.ones(
+                        (1, 1), dtype=torch.long, device=device
+                    )
+
+                fwd_inputs = _filter_forward_kwargs(raw_model, raw_fwd)
+                print("  [processor fallback] built pixel_values input.")
+        except Exception as exc2:
+            print(f"  [processor fallback] failed ({exc2}); will use 2·N·L approximation.")
 
     # ── Method 1: FlopCounterMode (built-in, no extra deps) ──────────────
-    try:
-        from torch.utils.flop_counter import FlopCounterMode  # type: ignore
+    if fwd_inputs is not None:
+        try:
+            # Force math SDPA so FlopCounterMode can instrument attention.
+            # Flash / mem-efficient kernels are opaque to the counter and would
+            # cause it to report 0 or raise an error for those ops.
+            with torch.no_grad(), _math_sdp_context():
+                with _flop_counter() as counter:
+                    raw_model(**fwd_inputs)
 
-        with torch.no_grad():
-            with FlopCounterMode(display=False) as counter:
-                raw_model(**fwd_inputs)
+            total_flops = counter.get_total_flops()
+            return {
+                "gflops":       round(total_flops / 1e9, 3),
+                "gmacs":        round(total_flops / 2e9, 3),
+                "flops_method": "FlopCounterMode",
+            }
+        except Exception as exc:
+            print(f"  [FlopCounterMode] failed: {exc}")
 
-        total_flops = counter.get_total_flops()
-        return {
-            "gflops":       round(total_flops / 1e9, 3),
-            "gmacs":        round(total_flops / 2e9, 3),
-            "flops_method": "FlopCounterMode",
-        }
-    except Exception as exc:
-        print(f"  [FlopCounterMode] failed: {exc}")
+    # ── Method 1b: FlopCounterMode — encoder + decoder separately ────────
+    # Encoder-decoder models (e.g. CXRMate) can fail with the combined forward
+    # because intermediate tensors produced by the encoder are None-initialised
+    # in the combined path and trip FlopCounterMode's dtype hooks.  Running the
+    # sub-modules in sequence avoids that: the encoder outputs real tensors that
+    # the decoder then consumes.
+    if (
+        fwd_inputs is not None
+        and "pixel_values" in fwd_inputs
+        and hasattr(raw_model, "encoder")
+    ):
+        try:
+            total_flops = 0
+
+            # ── Encoder pass ──────────────────────────────────────────────
+            enc_fwd = _filter_forward_kwargs(
+                raw_model.encoder,
+                {"pixel_values": fwd_inputs["pixel_values"]},
+            )
+            with torch.no_grad(), _math_sdp_context():
+                with _flop_counter() as counter:
+                    enc_out = raw_model.encoder(**enc_fwd)
+            total_flops += counter.get_total_flops()
+
+            # ── Decoder pass ──────────────────────────────────────────────
+            if hasattr(raw_model, "decoder") and "decoder_input_ids" in fwd_inputs:
+                enc_hidden = getattr(enc_out, "last_hidden_state", None)
+                if enc_hidden is not None:
+                    dec_fwd = _filter_forward_kwargs(
+                        raw_model.decoder,
+                        {
+                            "input_ids": fwd_inputs["decoder_input_ids"],
+                            "encoder_hidden_states": enc_hidden,
+                        },
+                    )
+                    with torch.no_grad(), _math_sdp_context():
+                        with _flop_counter() as counter:
+                            raw_model.decoder(**dec_fwd)
+                    total_flops += counter.get_total_flops()
+
+            return {
+                "gflops":       round(total_flops / 1e9, 3),
+                "gmacs":        round(total_flops / 2e9, 3),
+                "flops_method": "FlopCounterMode(enc+dec)",
+            }
+        except Exception as exc:
+            print(f"  [FlopCounterMode enc+dec] failed: {exc}")
+
+    # ── Method 1c: FlopCounterMode — LLaVA-style (encode_images + LLM) ──
+    # RaDialog uses BioViL-T (ResNet50) as vision encoder. Its forward has a
+    # non-standard signature and returns a dataclass with .patch_embeddings
+    # (not .last_hidden_state), so manually splitting vision_tower + projector
+    # is fragile.  encode_images() already handles the full pipeline:
+    #   vision_tower(img) → .patch_embeddings → flatten → mm_projector
+    # We measure it in one call, then measure the LLM text-prefill separately.
+    if (
+        fwd_inputs is not None
+        and hasattr(model_instance, "_vis_transforms")
+        and hasattr(raw_model, "encode_images")
+        and "input_ids" in fwd_inputs
+    ):
+        try:
+            total_flops = 0
+            device = next(raw_model.parameters()).device
+            dtype  = next(raw_model.parameters()).dtype
+
+            # Mirror the exact preprocessing used in inference:
+            # preprocess_image (remap_to_uint8 + grayscale) then vis_transforms.
+            img = (
+                model_instance.preprocess_image(image)
+                if hasattr(model_instance, "preprocess_image")
+                else image
+            )
+            image_tensor = (
+                model_instance._vis_transforms(img)
+                .unsqueeze(0)
+                .to(device=device, dtype=dtype)
+            )
+
+            # ── Vision encoder + projector ─────────────────────────────────
+            with torch.no_grad(), _math_sdp_context():
+                with _flop_counter() as counter:
+                    raw_model.encode_images(image_tensor)
+            total_flops += counter.get_total_flops()
+
+            # ── LLM text-prefill pass ──────────────────────────────────────
+            # When images=None, LLaVA's forward skips the vision path and
+            # runs as a pure language model on the text input_ids.
+            llm_fwd = _filter_forward_kwargs(
+                raw_model,
+                {k: v for k, v in fwd_inputs.items()
+                 if k in ("input_ids", "attention_mask", "position_ids")},
+            )
+            if llm_fwd.get("input_ids") is not None:
+                with torch.no_grad(), _math_sdp_context():
+                    with _flop_counter() as counter:
+                        raw_model(**llm_fwd)
+                total_flops += counter.get_total_flops()
+
+            return {
+                "gflops":       round(total_flops / 1e9, 3),
+                "gmacs":        round(total_flops / 2e9, 3),
+                "flops_method": "FlopCounterMode(vision+llm)",
+            }
+        except Exception as exc:
+            print(f"  [FlopCounterMode vision+llm] failed: {exc}")
+
+    # ── Method 1d: FlopCounterMode — LLaVA `images` param (e.g. RaDialog) ──
+    # LlavaLlamaForCausalLM.forward() accepts an `images` tensor directly and
+    # runs the full multimodal forward (vision_tower → mm_projector → LLM) in
+    # one call.  Build inputs from _vis_transforms + _tokenizer.
+    if (
+        hasattr(model_instance, "_vis_transforms")
+        and hasattr(model_instance, "_tokenizer")
+        and "images" in inspect.signature(raw_model.forward).parameters
+    ):
+        try:
+            device = next(raw_model.parameters()).device
+            dtype  = next(raw_model.parameters()).dtype
+
+            img = (
+                model_instance.preprocess_image(image)
+                if hasattr(model_instance, "preprocess_image")
+                else image
+            )
+            image_tensor = (
+                model_instance._vis_transforms(img)
+                .unsqueeze(0)
+                .to(device=device, dtype=dtype)
+            )
+
+            tokenizer = model_instance._tokenizer
+            text_enc  = tokenizer(prompt, return_tensors="pt")
+            input_ids = text_enc["input_ids"].to(device)
+
+            llava_fwd = _filter_forward_kwargs(
+                raw_model,
+                {"input_ids": input_ids, "images": image_tensor},
+            )
+
+            with torch.no_grad(), _math_sdp_context():
+                with _flop_counter() as counter:
+                    raw_model(**llava_fwd)
+
+            total_flops = counter.get_total_flops()
+            return {
+                "gflops":       round(total_flops / 1e9, 3),
+                "gmacs":        round(total_flops / 2e9, 3),
+                "flops_method": "FlopCounterMode(llava-images)",
+            }
+        except Exception as exc:
+            print(f"  [FlopCounterMode llava-images] failed: {exc}")
 
     # ── Method 2: calflops (optional install) ─────────────────────────────
-    try:
-        from calflops import calculate_flops  # type: ignore
+    if fwd_inputs is not None:
+        try:
+            from calflops import calculate_flops  # type: ignore
 
-        flops, macs, _ = calculate_flops(
-            model=raw_model,
-            kwargs=fwd_inputs,
-            output_as_string=False,
-            print_results=False,
-        )
-        return {
-            "gflops":       round(flops / 1e9, 3),
-            "gmacs":        round(macs / 1e9, 3),
-            "flops_method": "calflops",
-        }
-    except ImportError:
-        pass
-    except Exception as exc:
-        print(f"  [calflops] failed: {exc}")
+            flops, macs, _ = calculate_flops(
+                model=raw_model,
+                kwargs=fwd_inputs,
+                output_as_string=False,
+                print_results=False,
+            )
+            return {
+                "gflops":       round(flops / 1e9, 3),
+                "gmacs":        round(macs / 1e9, 3),
+                "flops_method": "calflops",
+            }
+        except ImportError:
+            pass
+        except Exception as exc:
+            print(f"  [calflops] failed: {exc}")
 
     # ── Method 3: 2·N·L approximation ────────────────────────────────────
     # For a transformer: FLOPs ≈ 2 × N_params × seq_len
@@ -148,11 +412,20 @@ def _compute_flops_macs(model_instance, image: Image.Image, prompt: str) -> dict
     try:
         n_params = sum(p.numel() for p in raw_model.parameters())
         seq_len: int | None = None
-        for key in ("input_ids", "attention_mask"):
-            t = fwd_inputs.get(key)
-            if t is not None and hasattr(t, "shape"):
-                seq_len = int(t.shape[-1])
-                break
+        if fwd_inputs is not None:
+            # For vision encoder-decoders (e.g. CXRMate), prefer pixel_values
+            # spatial extent over decoder_input_ids (which is just seq_len=1 for the
+            # BOS start token and would give a wildly underestimated FLOPs figure).
+            pv = fwd_inputs.get("pixel_values")
+            if pv is not None and hasattr(pv, "shape") and pv.ndim >= 4:
+                # shape is (B, [S,] C, H, W); H*W approximates the patch-token count
+                seq_len = int(pv.shape[-1] * pv.shape[-2])
+            else:
+                for key in ("input_ids", "attention_mask", "decoder_input_ids"):
+                    t = fwd_inputs.get(key)
+                    if t is not None and hasattr(t, "shape"):
+                        seq_len = int(t.shape[-1])
+                        break
         if seq_len is None:
             raise ValueError("Cannot determine sequence length from inputs.")
 
@@ -200,7 +473,9 @@ def run_stats(
         cache_dir=cache_dir or str(ROOT / ".models_cache"),
     )
 
-    raw_model, _ = model_instance._ensure_loaded()
+    # _ensure_loaded() returns (model, processor) for most models, but some
+    # override it with extra return values (e.g. cxrmateed returns 3).
+    raw_model = model_instance._ensure_loaded()[0]
     n_total, n_trainable = _count_params(raw_model)
     print(f"  Parameters: {n_total / 1e9:.3f} B total  |  {n_trainable / 1e9:.3f} B trainable")
 

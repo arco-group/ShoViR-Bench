@@ -44,11 +44,12 @@ matplotlib.rcParams.update({
     'ytick.minor.visible': False,
 })
 
+
 NAME_MAP = {
     # PadChest-GR — full names with ::seed=3
     "Chantal__RaDialog-interactive-radiology-report-generation_radialog_default::seed=3": "RaDialog",
     "StanfordAIMI__CheXagent-2-3b-srrg-findings_chexagent_default::seed=3": "CheXagent-2",
-    "X-iZhang__libra-llava-rad_llavarad_default::seed=3": "LIBRA-LLaVA",
+    "X-iZhang__libra-llava-rad_llavarad_default::seed=3": "LLaVA-Rad",
     "X-iZhang__libra-v1.0-7b_libra_default::seed=3": "LIBRA-v1",
     "aehrc__cxrmate-rrg24_cxrmateed_default::seed=3": "CXRMate",
     "microsoft__maira-2_maira2_default::seed=3": "MAIRA-2",
@@ -59,7 +60,7 @@ NAME_MAP = {
     "microsoft__maira-2_maira2_default": "MAIRA-2",
     "nvidia__NV-Reason-CXR-3B_nv_reason_default": "NV-Reason-CXR",
     "StanfordAIMI__CheXagent-2-3b-srrg-findings_chexagent_default": "CheXagent-2",
-    "X-iZhang__libra-llava-rad_llavarad_default": "LIBRA-LLaVA",
+    "X-iZhang__libra-llava-rad_llavarad_default": "LLaVA-Rad ",
     # Truncated filenames
     "google__medgemma-1": "MedGemma",
     "X-iZhang__libra-v1": "LIBRA-v1",
@@ -93,11 +94,16 @@ def _weighted_f1(row: pd.Series, dataset: str, exp_type: str) -> float:
     return float(np.average(vals, weights=ws))
 
 
-DATASETS    = [('padchest-gr', 'PadChest-GR'), ('mimic-cxr-jpg', 'MIMIC-CXR')]
+DATASETS    = [('mimic-cxr-jpg', 'MIMIC-CXR'), ('padchest-gr', 'PadChest-GR')]
 EXPERIMENTS = ['oco', 'doco', 'ro']
 
 # Experiment colours (OCO / DOCO bars)
 EXP_COLOR = {'oco': '#EE6677', 'doco': '#4477AA'}
+
+EXP_LABEL = {
+    exp: rf'$\Delta = \mu\text{{-}}F1_{{\mathrm{{RO}}}} - \mu\text{{-}}F1_{{\mathrm{{{exp.upper()}}}}}$'
+    for exp in ('oco', 'doco')
+}
 
 # Dataset background
 DS_BGCOLOR = {
@@ -209,8 +215,7 @@ for col_idx, (ds_key, ds_label) in enumerate(DATASETS):
         vals   = [df.loc[m, exp] if m in df.index and not np.isnan(df.loc[m, exp]) else np.nan
                   for m in models]
         offset = (i - 0.5) * bar_w
-        lbl    = (r'$\Delta_{\mathrm{OCO}}$' if exp == 'oco'
-                  else r'$\Delta_{\mathrm{DOCO}}$')
+        lbl    = EXP_LABEL[exp]
         ax.bar(x + offset, vals, bar_w,
                label=lbl if col_idx == 0 else None,
                color=EXP_COLOR[exp],
@@ -228,8 +233,8 @@ for col_idx, (ds_key, ds_label) in enumerate(DATASETS):
     ax.tick_params(colors='#333333')
 
 axes[0].set_ylabel(
-    r'$\Delta = F_1(\mathrm{RO}_{100}) - F_1(\mathrm{exp}_{100})$',
-    labelpad=6)
+    r'$\Delta = \mu\text{-}F1_{\mathrm{RO}} - \mu\text{-}F1(\mathrm{\star})$',
+    labelpad=6, fontsize=14)
 
 # Shared legend below
 handles, labels = axes[0].get_legend_handles_labels()
@@ -237,7 +242,7 @@ fig.legend(handles, labels,
            loc='lower center', ncol=len(labels),
            bbox_to_anchor=(0.5, -0.18),
            frameon=True, facecolor='white', edgecolor='#dddddd',
-           columnspacing=1.4, handlelength=1.2, fontsize=11)
+           columnspacing=1.4, handlelength=1.2, fontsize=14)
 
 fig.savefig(OUTPUT_DIR / 'sensitivity_score.pdf', bbox_inches='tight', pad_inches=0.1)
 fig.savefig(OUTPUT_DIR / 'sensitivity_score.png', bbox_inches='tight', pad_inches=0.1)

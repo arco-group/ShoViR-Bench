@@ -59,15 +59,16 @@
         "Support_Devices" :  270
         },
     
-    "doco": 
-          {"Atelectasis": 84, 
-          "Cardiomegaly": 95, 
-          "Fracture": 43, 
-          "Lung_Lesion": 37, 
-          "Lung_Opacity": 123, 
-          "Pleural_Effusion": 104, 
-          "Pleural_Other": 48, 
-          "Support_Devices": 129}
+    "doco": {
+        "Atelectasis" :  232,
+        "Cardiomegaly" :  314,
+        "Fracture" :  141,
+        "Lung_Lesion" :  146,
+        "Lung_Opacity" :  342,
+        "Pleural_Effusion" :  186,
+        "Pleural_Other" :  183,
+        "Support_Devices" :  270
+        }
     , 
     "ro": {
         "Atelectasis" :  232,

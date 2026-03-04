@@ -63,8 +63,8 @@ DISEASE_LABELS = {
 SKIP_STEMS = {'microsoft__maira-2_maira2_default::seed=3_grounded'}
 
 DATASETS = [
-    ('padchest-gr',   'PadChest-GR'),
     ('mimic-cxr-jpg', 'MIMIC-CXR'),
+    ('padchest-gr',   'PadChest-GR'),
 ]
 EXPERIMENTS = [
     ('Baseline', 'oco',  'p00'),
@@ -169,7 +169,7 @@ for ax_idx, (ds_key, ds_label) in enumerate(DATASETS):
     else:
         ax.tick_params(labelbottom=False)
 
-    ax.set_ylabel('Mean CheXBERT F1')
+    ax.set_ylabel(r'F1-Score', fontsize=14)
 
     all_means = [v for s in ds['stats'].values() for v in s['means'] if not np.isnan(v)]
     ymax = min(1.0, (max(all_means) + 0.12) if all_means else 1.0)
