@@ -69,7 +69,7 @@ NAME_MAP = {
     # PadChest-GR (with ::seed=3)
     "Chantal__RaDialog-interactive-radiology-report-generation_radialog_default::seed=3": "RaDialog",
     "StanfordAIMI__CheXagent-2-3b-srrg-findings_chexagent_default::seed=3": "CheXagent-2",
-    "X-iZhang__libra-llava-rad_llavarad_default::seed=3":  "LIBRA-LLaVA",
+    "X-iZhang__libra-llava-rad_llavarad_default::seed=3":  "LLaVA-Rad",
     "X-iZhang__libra-v1.0-7b_libra_default::seed=3":       "LIBRA-v1",
     "aehrc__cxrmate-rrg24_cxrmateed_default::seed=3":       "CXRMate",
     "microsoft__maira-2_maira2_default::seed=3":            "MAIRA-2",
@@ -80,7 +80,7 @@ NAME_MAP = {
     "microsoft__maira-2_maira2_default":                    "MAIRA-2",
     "nvidia__NV-Reason-CXR-3B_nv_reason_default":           "NV-Reason-CXR",
     "StanfordAIMI__CheXagent-2-3b-srrg-findings_chexagent_default": "CheXagent-2",
-    "X-iZhang__libra-llava-rad_llavarad_default":           "LIBRA-LLaVA",
+    "X-iZhang__libra-llava-rad_llavarad_default":           "LLaVA-Rad",
     # Truncated names
     "google__medgemma-1":  "MedGemma",
     "X-iZhang__libra-v1":  "LIBRA-v1",
