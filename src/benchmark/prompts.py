@@ -39,7 +39,6 @@ PROMPTS = {
         ""
     ),
     "radiology_minimal": (
-    "Generate a complete radiology report for this image."
+        "Describe the radiographic findings in this chest X-ray."
     ),
 }
-

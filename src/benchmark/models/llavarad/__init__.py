@@ -329,11 +329,13 @@ class LLaVARad(BaseHFLM):
                 input_ids=input_ids,
                 images=images_t,
                 attention_mask=attention_mask,
-                do_sample=False,
+                do_sample=True,
+                temperature=0.2,
                 max_new_tokens=self.generation_max_tokens,
+                num_beams=5,
                 stopping_criteria=[stopping],
                 use_cache=self.caching,
-                pad_token_id=pad_id,
+                pad_token_id=tokenizer.pad_token_id,
             )
 
         # 6) Decode per sample

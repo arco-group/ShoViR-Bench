@@ -2,7 +2,7 @@
 # Submit all Baseline jobs for a given dataset
 #
 # Usage:
-#   ./scripts/baseline/submit_all.sh --dataset padchest-gr [--dry-run] [--skip-existing]
+#   ./scripts/baseline/submit_all.sh --dataset padchest-gr [--dry-run] [--skip-existing] [--single-prompt-baseline]
 
 set -euo pipefail
 
@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATASET=""
 DRY_RUN=false
 SKIP_EXISTING=false
+SINGLE_PROMPT_BASELINE=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -18,13 +19,14 @@ while [[ $# -gt 0 ]]; do
         --dataset) DATASET="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
         --skip-existing) SKIP_EXISTING=true; shift ;;
-        *) echo "Unknown argument: $1"; echo "Usage: $0 --dataset <name> [--dry-run] [--skip-existing]"; exit 1 ;;
+        --single-prompt-baseline) SINGLE_PROMPT_BASELINE=true; shift ;;
+        *) echo "Unknown argument: $1"; echo "Usage: $0 --dataset <name> [--dry-run] [--skip-existing] [--single-prompt-baseline]"; exit 1 ;;
     esac
 done
 
 if [[ -z "$DATASET" ]]; then
     echo "Error: --dataset is required"
-    echo "Usage: $0 --dataset padchest-gr [--dry-run] [--skip-existing]"
+    echo "Usage: $0 --dataset padchest-gr [--dry-run] [--skip-existing] [--single-prompt-baseline]"
     echo ""
     echo "Available datasets:"
     for d in "$SCRIPT_DIR"/*/; do
@@ -43,6 +45,7 @@ fi
 FORWARD_ARGS=()
 $DRY_RUN && FORWARD_ARGS+=(--dry-run)
 $SKIP_EXISTING && FORWARD_ARGS+=(--skip-existing)
+$SINGLE_PROMPT_BASELINE && FORWARD_ARGS+=(--single-prompt-baseline)
 
 echo "============================================"
 echo "  Baseline — ${DATASET}"

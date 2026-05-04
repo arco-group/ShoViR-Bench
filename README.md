@@ -238,6 +238,8 @@ python -m src.benchmark.cli \
 - `--experiment`: Experiment name (e.g., `baseline`, `occluded`) (required)
 - `--output-dir`: Directory for results (default: `outputs`)
 - `--cache-dir`: HuggingFace cache directory (default: `.models_cache`)
+- `--single-prompt-baseline`: For `--experiment baseline`, use one shared prompt across models and save under `outputs/baseline_SP/`
+- `--shared-prompt-key`: Prompt used by `--single-prompt-baseline` (default: `radiology_minimal`)
 - `--device`: Device for inference (default: `cuda:0`)
 - `--dtype`: Data type precision (default: `bfloat16`)
 - `--trust-remote-code`: Allow loading custom model code
@@ -262,6 +264,25 @@ python -m src.benchmark.cli \
     --trust-remote-code \
     --num-images 100
 ```
+
+### Example: Shared-Prompt Baseline
+
+```bash
+python -m src.benchmark.cli \
+    --model medgemma \
+    --data-json data/padchest-gr/chexpert-by-label/verified_samples.json \
+    --data "data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images" \
+    --experiment baseline \
+    --single-prompt-baseline \
+    --output-dir outputs \
+    --cache-dir .models_cache \
+    --device cuda:0 \
+    --dtype bfloat16 \
+    --trust-remote-code \
+    --num-images 100
+```
+
+This keeps the preprocessing experiment as `baseline`, uses the shared `radiology_minimal` prompt by default, and writes to `outputs/baseline_SP/<dataset>/`.
 
 ### Example: Running CheXOne
 
@@ -304,6 +325,12 @@ This will submit jobs for all 9 models sequentially.
 
 ```bash
 ./scripts/baseline/submit_all.sh --dry-run
+```
+
+#### Submit Shared-Prompt Baseline
+
+```bash
+./scripts/baseline/submit_all.sh --dataset padchest-gr --single-prompt-baseline
 ```
 
 #### Submit Individual Models

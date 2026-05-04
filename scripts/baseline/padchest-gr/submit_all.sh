@@ -1,6 +1,6 @@
 #!/bin/bash
 # Submit all baseline jobs to SLURM
-# Usage: ./scripts/baseline/submit_all.sh [--dry-run]
+# Usage: ./scripts/baseline/submit_all.sh [--dry-run] [--skip-existing] [--single-prompt-baseline]
 
 set -euo pipefail
 
@@ -17,13 +17,19 @@ DRY_RUN=false
 SKIP_EXISTING=false
 EXPERIMENT="baseline"
 SEED="3"
+EXTRA_ARGS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true; shift ;;
         --skip-existing) SKIP_EXISTING=true; shift ;;
-        *) echo "Unknown argument: $1"; echo "Usage: $0 [--dry-run] [--skip-existing]"; exit 1 ;;
+        --single-prompt-baseline)
+            EXPERIMENT="baseline_SP"
+            EXTRA_ARGS="--single-prompt-baseline"
+            shift
+            ;;
+        *) echo "Unknown argument: $1"; echo "Usage: $0 [--dry-run] [--skip-existing] [--single-prompt-baseline]"; exit 1 ;;
     esac
 done
 
@@ -60,7 +66,10 @@ echo "=== PadChest-GR Baseline Experiments ==="
 echo "Project: ${PROJECT_DIR}"
 echo "Data: data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images"
 echo "Data JSON: data/padchest-gr/chexpert-by-label/verified_samples.json"
-echo "Output: outputs/baseline/padchest-gr/"
+echo "Output: outputs/${EXPERIMENT}/padchest-gr/"
+if [[ -n "$EXTRA_ARGS" ]]; then
+    echo "Extra CLI args: ${EXTRA_ARGS}"
+fi
 echo ""
 
 # Models to run
@@ -100,9 +109,9 @@ for model in "${MODELS[@]}"; do
     fi
 
     if $DRY_RUN; then
-        echo "  [DRY] Would submit: sbatch $script"
+        echo "  [DRY] Would submit: sbatch $script ${EXTRA_ARGS}"
     else
-        job_id=$(sbatch --parsable "$script")
+        job_id=$(sbatch --parsable "$script" ${EXTRA_ARGS})
         JOB_IDS+=("$job_id")
         echo "  [OK] $model - Job ID: $job_id"
     fi

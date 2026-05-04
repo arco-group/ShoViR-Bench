@@ -75,6 +75,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--cache-dir", default="./model_caching")
     parser.add_argument("--prompt-key", default=None)
+    parser.add_argument(
+        "--single-prompt-baseline",
+        action="store_true",
+        help=(
+            "Run the unoccluded baseline with a shared prompt across models and "
+            "write it under the baseline_SP output directory."
+        ),
+    )
+    parser.add_argument(
+        "--shared-prompt-key",
+        default="radiology_minimal",
+        help="Prompt key used by --single-prompt-baseline. Default: radiology_minimal.",
+    )
     parser.add_argument("--max-images", type=int, default=None)
     parser.add_argument("--device", default=None)
     parser.add_argument("--dtype", default=None)
@@ -285,7 +298,16 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     spec = MODEL_SPECS[args.model]
+
+    if args.single_prompt_baseline:
+        if args.experiment != "baseline":
+            parser.error("--single-prompt-baseline can only be used with --experiment baseline")
+        if args.prompt_key is not None and args.prompt_key != args.shared_prompt_key:
+            parser.error("--single-prompt-baseline sets --prompt-key; use --shared-prompt-key to choose it")
+        args.prompt_key = args.shared_prompt_key
+
     prompt_key = args.prompt_key or spec.prompt_key
+    output_experiment = "baseline_SP" if args.single_prompt_baseline else args.experiment
 
     # Set random seed for reproducible bbox selection
     np.random.seed(args.seed)
@@ -297,7 +319,7 @@ def main() -> int:
     output_path = (
         Path(args.output)
         if args.output is not None
-        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name, args.seed)
+        else _build_output_path(args.output_dir, output_experiment, spec.model_id, prompt_key, dataset_name, args.seed)
     )
     print('remote code: ', args.trust_remote_code)
     config = BenchmarkConfig(
@@ -313,6 +335,7 @@ def main() -> int:
         trust_remote_code=args.trust_remote_code,
         filter_labels=args.filter_labels,
         num_images=args.num_images,
+        seed=args.seed,
     )
 
     # Set random seed for reproducible bbox selection
