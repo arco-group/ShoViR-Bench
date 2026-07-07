@@ -249,26 +249,54 @@ radscore --filepath outputs/baseline/padchest-gr/medgemma.jsonl --compute-green
 
 ## Results
 
-Full sweeps across `RO`, `OCO`, and `DOCO` at perturbation strengths `p ∈ {0, 20, 40, 60, 80, 100}%`, on both PadChest-GR and MIMIC-CXR, are reported in the paper. This section summarizes the headline figures shipped in `figures/`.
+Full sweeps across `RO`, `OCO`, and `DOCO` at perturbation strengths `p ∈ {0, 20, 40, 60, 80, 100}%`, on both PadChest-GR and MIMIC-CXR, are reported in the paper. This section summarizes the headline figures and tables shipped in `figures/`.
 
-**Report quality vs. random occlusion** (`figures/ro/`) — F1-RadGraph, and Macro/Micro F1-5 (top-5 diseases) as a function of `RO` strength. CXRMate-ED and MAIRA-2 are the only two models whose scores decline meaningfully as the image is progressively occluded; the rest sit on flat, low-slope curves from 0% to 100% occlusion, indicating little dependence on the actually-visible pixels.
+### Baseline vs. Full Noise Image (image-level evaluation)
+
+*Baseline*: performance on clean images. *Full Noise Image* (FN): performance when the entire image is replaced with noise. *ΔFN*: absolute drop relative to baseline (higher = more visually grounded, lower = more shortcut-prone). Per metric, the best baseline score is **bold**; per dataset, the highest ΔFN (most grounded model) is **bold** and the lowest ΔFN (most shortcut-prone model) is <u>underlined</u>.
+
+**MIMIC-CXR**
+
+| Model | F1-14 | F1-5 | F1-RG | GREEN | B-1 | B-4 | R-L | F1-14 (FN) | F1-5 (FN) | F1-RG (FN) | GREEN (FN) | B-1 (FN) | B-4 (FN) | R-L (FN) | ΔFN F1-14 | ΔFN F1-5 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| RaDialog | **0.596** | **0.619** | 0.202 | 0.270 | 0.330 | 0.087 | 0.232 | 0.230 | 0.334 | 0.132 | **0.160** | 0.185 | 0.036 | **0.177** | 0.366 | 0.286 |
+| CheXagent-2 | 0.576 | 0.615 | 0.202 | 0.299 | 0.244 | 0.042 | 0.181 | 0.029 | 0.000 | 0.129 | 0.159 | 0.064 | 0.004 | 0.116 | **0.547** | **0.615** |
+| LLaVA-Rad | 0.572 | 0.578 | 0.200 | 0.281 | **0.333** | **0.097** | 0.242 | 0.320 | 0.387 | 0.128 | 0.154 | 0.236 | **0.045** | 0.170 | <u>0.252</u> | <u>0.190</u> |
+| Libra-v1 | 0.562 | 0.581 | 0.175 | 0.256 | 0.260 | 0.055 | 0.207 | 0.215 | 0.244 | 0.086 | 0.084 | 0.186 | 0.031 | 0.170 | 0.348 | 0.337 |
+| CXRMate | 0.577 | 0.607 | **0.253** | **0.315** | 0.332 | 0.093 | **0.246** | **0.321** | **0.412** | **0.139** | 0.115 | **0.240** | 0.024 | 0.156 | 0.256 | 0.194 |
+| MedGemma | 0.555 | 0.553 | 0.113 | 0.215 | 0.100 | 0.011 | 0.114 | 0.031 | 0.000 | 0.002 | 0.000 | 0.091 | 0.001 | 0.086 | 0.524 | 0.553 |
+| MAIRA-2 | 0.550 | 0.575 | 0.141 | 0.196 | 0.215 | 0.033 | 0.166 | 0.093 | 0.005 | 0.080 | 0.053 | 0.034 | 0.001 | 0.093 | 0.458 | 0.569 |
+| NV-Reason-CXR | 0.540 | 0.584 | 0.121 | 0.165 | 0.077 | 0.012 | 0.086 | 0.230 | 0.178 | 0.044 | 0.019 | 0.076 | 0.009 | 0.063 | 0.310 | 0.405 |
+
+**PadChest-GR**
+
+| Model | F1-14 | F1-5 | F1-RG | GREEN | B-1 | B-4 | R-L | F1-14 (FN) | F1-5 (FN) | F1-RG (FN) | GREEN (FN) | B-1 (FN) | B-4 (FN) | R-L (FN) | ΔFN F1-14 | ΔFN F1-5 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| RaDialog | 0.404 | 0.446 | 0.044 | 0.102 | 0.019 | 0.002 | 0.043 | 0.164 | **0.234** | 0.024 | **0.040** | 0.107 | 0.004 | **0.071** | <u>0.240</u> | <u>0.212</u> |
+| CheXagent-2 | 0.469 | 0.565 | 0.053 | 0.159 | 0.109 | 0.015 | 0.100 | 0.030 | 0.000 | 0.020 | 0.002 | 0.033 | 0.000 | 0.037 | **0.439** | **0.565** |
+| LLaVA-Rad | 0.441 | 0.495 | 0.054 | 0.142 | 0.130 | 0.014 | 0.110 | **0.175** | 0.201 | 0.042 | 0.030 | 0.100 | 0.004 | 0.063 | 0.266 | 0.294 |
+| Libra-v1 | 0.428 | 0.495 | 0.042 | 0.132 | 0.143 | 0.018 | 0.095 | 0.155 | 0.232 | 0.017 | 0.028 | 0.094 | 0.002 | **0.071** | 0.272 | 0.263 |
+| CXRMate | **0.519** | **0.586** | **0.145** | 0.212 | **0.306** | **0.096** | **0.194** | 0.171 | 0.211 | **0.051** | 0.033 | 0.073 | **0.006** | **0.071** | 0.348 | 0.374 |
+| MedGemma | 0.426 | 0.471 | 0.025 | **0.287** | 0.028 | 0.004 | 0.041 | 0.030 | 0.000 | 0.000 | 0.000 | 0.024 | 0.000 | 0.027 | 0.396 | 0.471 |
+| MAIRA-2 | 0.474 | 0.555 | 0.122 | 0.203 | 0.263 | 0.084 | 0.181 | 0.112 | 0.007 | 0.017 | 0.001 | **0.162** | 0.000 | 0.067 | 0.362 | 0.548 |
+| NV-Reason-CXR | 0.432 | 0.447 | 0.022 | 0.135 | 0.020 | 0.003 | 0.027 | 0.167 | 0.166 | 0.012 | 0.014 | 0.019 | 0.002 | 0.029 | 0.265 | 0.281 |
+
+CheXagent-2 shows the largest ΔFN on both datasets — the most visually grounded model when the entire image is replaced with noise — while LLaVA-Rad (MIMIC-CXR) and RaDialog (PadChest-GR) show the smallest, i.e. their scores barely move even with zero visual evidence left.
+
+### Direct vs. contextual shortcuts
+
+Micro-F1 vs. perturbation ratio for `RO`, `OCO`, and `DOCO`, across 8 models on MIMIC-CXR (top) and PadChest-GR (bottom). `RO` curves stay essentially flat for every model, as expected for a control that removes disease-unrelated evidence. `OCO` produces the steepest drops overall — e.g. on MIMIC-CXR most models fall from ~0.72–0.76 at `p=0` to ~0.28–0.42 at `p=100` — showing that report quality *is* substantially tied to the target region once it's actually removed. `DOCO` sits between the two, confirming that co-occurrence context contributes but matters less than the direct region. Model ranking is architecture-dependent: e.g. CXRMate is consistently the strongest and most stable model on PadChest-GR across all three conditions, while MAIRA-2 has the lowest baseline but a comparatively shallower relative decline under `OCO`.
 
 <p align="center">
-  <a href="figures/ro/F1_RadGraph.pdf">F1-RadGraph vs. RO (PDF)</a> ·
-  <a href="figures/ro/Macro_F1_5.pdf">Macro F1-5 vs. RO (PDF)</a> ·
-  <a href="figures/ro/Micro_F1_5.pdf">Micro F1-5 vs. RO (PDF)</a>
+  <img src="figures/lineplot.png" alt="μ-F1 vs. Perturbation Ratio, RO/OCO/DOCO" width="900"/>
 </p>
 
-**Direct vs. contextual shortcuts** (`figures/lineplot.pdf`) — micro-F1 vs. perturbation ratio for `RO`, `OCO`, and `DOCO`, across 8 models on MIMIC-CXR (top) and PadChest-GR (bottom). `RO` curves stay essentially flat for every model, as expected for a control that removes disease-unrelated evidence. `OCO` produces the steepest drops overall — e.g. on MIMIC-CXR most models fall from ~0.72–0.76 at `p=0` to ~0.28–0.42 at `p=100` — showing that report quality *is* substantially tied to the target region once it's actually removed. `DOCO` sits between the two, confirming that co-occurrence context contributes but matters less than the direct region. Model ranking is architecture-dependent: e.g. CXRMate is consistently the strongest and most stable model on PadChest-GR across all three conditions, while MAIRA-2 has the lowest baseline but a comparatively shallower relative decline under `OCO`.
+### Per-pathology breakdown
+
+F1-score per disease category, averaged across all evaluated models, comparing `Baseline`, `OCO`, `DOCO`, and `RO` at `p=100%` on MIMIC-CXR (top) and PadChest-GR (bottom). `OCO` is the only condition that meaningfully suppresses detection for most pathologies (e.g. Pleural Effusion drops from ~0.87 to ~0.36 on MIMIC-CXR baseline→OCO), while `DOCO` and `RO` track much closer to the unperturbed baseline — consistent with the direct-shortcut/contextual-shortcut distinction holding at the per-disease level, not just in aggregate.
 
 <p align="center">
-  <a href="figures/lineplot.pdf">μ-F1 vs. Perturbation Ratio, RO/OCO/DOCO (PDF)</a>
-</p>
-
-**Per-pathology breakdown** (`figures/disease_f1.pdf`) — F1-score per disease category, averaged across all evaluated models, comparing `Baseline`, `OCO`, `DOCO`, and `RO` at `p=100%` on MIMIC-CXR (top) and PadChest-GR (bottom). `OCO` is the only condition that meaningfully suppresses detection for most pathologies (e.g. Pleural Effusion drops from ~0.87 to ~0.36 on MIMIC-CXR baseline→OCO), while `DOCO` and `RO` track much closer to the unperturbed baseline — consistent with the direct-shortcut/contextual-shortcut distinction holding at the per-disease level, not just in aggregate.
-
-<p align="center">
-  <a href="figures/disease_f1.pdf">Per-Pathology F1, Baseline/OCO/DOCO/RO (PDF)</a>
+  <img src="figures/disease_f1.png" alt="Per-Pathology F1, Baseline/OCO/DOCO/RO" width="900"/>
 </p>
 
 ---
