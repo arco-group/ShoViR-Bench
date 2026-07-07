@@ -1,0 +1,21 @@
+# License Summary
+
+This repository is governed by the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)** license.
+
+## Key Permissions
+You may share and adapt the material freely, provided you:
+- Give appropriate credit to Filippo Ruffini and co-authors
+- Indicate any modifications made
+- Do not use it for commercial purposes
+
+## Commercial Use Restrictions
+"You may not use the material for commercial purposes. Commercial use includes...incorporating the code or trained models into a for-profit product" and similar revenue-generating applications.
+
+## Important Limitations
+- The PadChest-GR and MIMIC-CXR datasets are **not** included and remain governed by their own separate data-use agreements
+- Third-party submodules (Libra, RaDialog, GREEN) follow their own upstream licenses
+- No warranties are provided with the software
+
+For commercial applications, contact the publication's corresponding authors for licensing inquiries.
+
+Full legal text: https://creativecommons.org/licenses/by-nc/4.0/legalcode

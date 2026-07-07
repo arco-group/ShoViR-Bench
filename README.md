@@ -1,75 +1,88 @@
-# Shortcut Learning in Radiology Report Generation
+# SHOVIR
 
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-ee4c2c)
-![Platform](https://img.shields.io/badge/platform-SLURM%20%2F%20NAISS%20Alvis-lightgrey)
-![License](https://img.shields.io/badge/license-Unspecified-lightgrey)
+<div align="center">
 
-A benchmark framework for evaluating **vision-language models (VLMs)** on **chest X-ray radiology report generation**, built around the **PadChest-GR** and **MIMIC-CXR** datasets. It supports 9 models and a suite of occlusion experiments designed to probe shortcut learning — i.e., whether a model's report quality depends on regions of the image it shouldn't need.
+<p align="center">
+  <img src="figures/BANNER-SHOVIR.png" alt="SHOVIR — a benchmark for vision shortcut learning in radiology report generation" width="820"/>
+</p>
 
-[Overview](#overview) · [Repository Structure](#repository-structure) · [Setup](#setup) · [Supported Models](#supported-models) · [Usage](#usage) · [Experiments](#experiments) · [Evaluation Metrics](#evaluation-metrics) · [Output Format](#output-format) · [Troubleshooting](#troubleshooting) · [Citation](#citation)
+[![arXiv](https://img.shields.io/badge/arXiv-2606.30201-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2606.30201)
+[![Paper PDF](https://img.shields.io/badge/Read%20the-Paper-1f6feb?style=for-the-badge&logo=readthedocs&logoColor=white)](https://arxiv.org/pdf/2606.30201)
+[![Python](https://img.shields.io/badge/Python-3.11.5-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![GPU](https://img.shields.io/badge/GPU-48GB%20VRAM%20(L40S%2FA40)-6aa84f?style=for-the-badge&logo=nvidia&logoColor=white)](#environment-setup)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey?style=for-the-badge&logo=creativecommons&logoColor=white)](#license)
 
-* * *
+**A benchmark for evaluating whether vision-language models genuinely ground their diagnostic statements in visual evidence during chest X-ray report generation — rather than exploiting learned shortcuts that standard metrics reward but radiologists would not trust.**
+
+**Filippo Ruffini** · Marco Salmé · Rosa Sicilia · Valerio Guarrasi · **Paolo Soda**
+
+[📄 Paper](https://arxiv.org/abs/2606.30201) ·
+[🧩 Overview](#overview) ·
+[⚙️ Setup](#environment-setup) ·
+[🚀 Usage](#usage) ·
+[📊 Results](#results) ·
+[📚 Citation](#citation)
+
+</div>
+
+---
 
 ## Overview
 
-Radiology report generation models can appear accurate while actually relying on spurious correlations (shortcuts) rather than the clinical findings a radiologist would use. This framework operationalizes that question by:
+This repository accompanies the paper *"SHOVIR: A Benchmark for Evaluating Vision Shortcut Learning in Radiology Report Generation"* ([arXiv:2606.30201](https://arxiv.org/abs/2606.30201)).
 
-1. Running a fixed set of VLMs over the **same** images and prompts (`baseline`),
-2. Perturbing the input images in controlled ways — occluding object classes, occluding random regions, or injecting noise — while holding the model and prompt fixed,
-3. Scoring every condition with the same suite of report-generation metrics,
+Standard radiology report generation (RRG) metrics (BLEU, ROUGE, RadGraph-F1, CheXBERT) reward textual and clinical-entity overlap with a reference report, but say nothing about *where in the image* a model looked before writing a finding. A model can produce a fluent, clinically plausible report while never actually attending to the pathology it claims to describe — a **vision shortcut**. SHOVIR isolates this failure mode by extending two chest X-ray datasets (**PadChest-GR**, **MIMIC-CXR**) with spatial disease annotations and applying targeted image perturbations that separate two shortcut behaviors:
 
-so that changes in score can be attributed to the perturbation rather than to model or prompting differences.
+- **Direct shortcuts** (`OCO`, Object Class Occlusion) — a finding persists in the generated report even after the visual evidence for it has been removed from the image. If occluding the target pathology's own region doesn't suppress the finding, the model wasn't looking at it.
+- **Contextual shortcuts** (`DOCO`, Co-occurrence Object Class Occlusion) — detection of a finding fails after occluding *co-occurring, related* pathologies, even though the target region itself is left intact. The model was relying on correlated context rather than the region in question.
+- **Random Occlusion** (`RO`) is the control condition: occluding random, disease-unrelated regions at matching strength, so that degradation under `OCO`/`DOCO` can be attributed to the *targeted* removal of evidence rather than to occlusion in general.
 
-* * *
+Across **eight state-of-the-art VLMs** (extended here to **11** in this repository) — CXRMate-ED, CheXagent, LLaVA-Rad, Libra, MAIRA-2, MedGemma, NV-Reason-CXR, RaDialog, plus Gemini and GPT-5.4 baselines — we find substantial variation in shortcut behavior across architectures and datasets, and that report fluency/quality does **not** imply strong spatial grounding: some of the highest-scoring models on standard metrics show the flattest response to occlusion, i.e. their findings are largely occlusion-invariant.
 
-## Repository Structure
+> **Dataset note.** PadChest-GR and MIMIC-CXR are governed by their own data-use agreements and are **not redistributed** with this repository. `data/`, `outputs/`, `results/`, `logs/`, and all venv directories are gitignored. The repository contains the full inference, occlusion, and evaluation pipeline, along with placeholder paths that downstream users can point at their own copy of either dataset.
+
+---
+
+## Repository layout
 
 ```
-src/benchmark/               # Core benchmark: CLI, model registry, inference pipeline
-├── cli.py                   # Entry point: python -m src.benchmark.cli
-├── hf_runner.py              # HuggingFace inference orchestration
-├── config.py                 # Configuration dataclass
-├── prompts.py                 # Model-specific prompt templates
-├── preprocess.py              # Image preprocessing & occlusion strategies
-├── models/                    # One implementation file per model family
-├── datasets/                  # PadChest-GR / MIMIC-CXR dataset loaders
-└── io.py                      # I/O utilities
-
-src/analysis/                 # Dataset analysis & visualization scripts
-evaluations/                  # Legacy in-repo evaluation pipeline (being replaced by radscore, see below)
-scripts/                      # SLURM batch scripts, one folder per experiment family
-├── baseline/                  # Full image, no modification
-├── oco/, ro/                   # (Random) Object Class Occlusion sweeps
-├── doco/                       # Directed occlusion variants
-└── all_noise_mean/              # Noise-injection experiments
-data/                         # Dataset directory (images + JSON annotations) — gitignored
-outputs/                      # Inference results, JSONL per model/experiment — gitignored
-results/                      # Evaluation results (CSV/Excel) — gitignored
-logs/                         # SLURM job logs — gitignored
+src/benchmark/           # Core benchmark: CLI, model registry, inference pipeline
+  models/                # 11 model implementations (one file per model family)
+  cli.py                 # Entry point: python -m src.benchmark.cli
+  hf_runner.py           # HuggingFace inference orchestration
+  config.py              # Configuration dataclass
+  prompts.py             # Model-specific prompt templates
+  preprocess.py          # Image preprocessing & occlusion strategies (oco/doco/roco/ro/noise)
+  datasets/              # PadChest-GR / MIMIC-CXR dataset loaders
+  io.py                  # I/O utilities
+src/analysis/            # Dataset analysis & visualization scripts
+scripts/                 # SLURM batch scripts, one subtree per experiment family
+  baseline/                # Full-image, no occlusion
+  oco/, doco/, ro/         # Object-class / co-occurrence / random occlusion sweeps
+  all_noise_mean/          # Correlated-noise perturbation sweep
+figures/                  # Paper figures (occlusion sweeps, per-pathology breakdown)
+evaluations/              # Deprecated in-repo metrics — see Evaluation Metrics below
+Libra/                   # Git submodule: LLaVA-based backbone for Libra & LLaVA-Rad
+RaDialog-interactive-radiology-report-generation/  # Git submodule: RaDialog model
+GREEN/                   # Git submodule: Stanford AIMI GREEN evaluation metric
+data/                    # Dataset directory (gitignored)
+outputs/                 # Inference results, JSONL per model/experiment (gitignored)
+results/                 # Evaluation results, CSV/Excel (gitignored)
+logs/                    # Job logs (gitignored)
 ```
 
-**Git submodules:**
-- `Libra/` — LLaVA-based architecture backing Libra & LLaVA-Rad
-- `RaDialog-interactive-radiology-report-generation/` — RaDialog model
-- `GREEN/` — Stanford AIMI evaluation metric (legacy; superseded by [radscore](https://github.com/fruffini/radscore))
-
-Initialize with:
+Initialize submodules with:
 ```bash
 git submodule update --init --recursive
 ```
 
-* * *
+---
 
-## Setup
+## Environment Setup
 
-Requires **Python 3.11.5**. On the NAISS Alvis cluster:
+Requires **Python 3.11.5**, CUDA, and a **single GPU with ≥48GB VRAM** (validated on NVIDIA **L40S** and **A40**) — no multi-GPU or cluster orchestration is needed to run any model in the registry at `bfloat16`.
 
-```bash
-module load Python/3.11.5-GCCcore-13.2.0
-```
-
-Because model families pull in conflicting dependencies, each family gets its own virtual environment:
+Multiple virtual environments are used to avoid dependency conflicts between model families:
 
 | Venv | Models | Requirements file |
 |------|--------|--------------------|
@@ -78,27 +91,31 @@ Because model families pull in conflicting dependencies, each family gets its ow
 | `.SC_Libra_venv` | Libra, LLaVA-Rad | `requirements_llava-libra.txt` |
 | `.venv_chexagent` | CheXagent | `requirements_chexagent.txt` |
 | `.radialog_venv` | RaDialog | `requirements_radialog.txt` |
-| `.venv_eval` | Metrics (legacy path — see [Evaluation Metrics](#evaluation-metrics)) | `requirements_eval.txt` |
 
-Example for one family:
 ```bash
 python3.11 -m venv .venv_RRG
 source .venv_RRG/bin/activate
+pip install --upgrade pip
 pip install -r requirements_rrg.txt
 ```
 
-Required environment variables:
+Gemini and GPT-5.4 are called via API and do not need a local model venv, but do need their respective API keys exported.
+
+### Required environment variables
+
 ```bash
 export HF_TOKEN="<huggingface_token>"
 export HF_HOME="${PWD}/.models_cache"
 export PYTHONPATH="${PWD}:${PYTHONPATH}"
 ```
 
-* * *
+### Batch scheduling
+
+The `scripts/` tree ships SLURM job scripts for convenience on Slurm-managed clusters, but every model runs identically via the plain CLI on a single workstation GPU — SLURM is optional tooling for batch submission, not a requirement.
+
+---
 
 ## Supported Models
-
-All models run in **bfloat16** precision.
 
 | Model | Key | Virtual env |
 |-------|-----|-------------|
@@ -111,12 +128,25 @@ All models run in **bfloat16** precision.
 | LLaVA-Rad | `llavarad` | `.SC_Libra_venv` |
 | CheXagent | `chexagent` | `.venv_chexagent` |
 | RaDialog | `radialog` | `.radialog_venv` |
+| Gemini | `gemini` | API |
+| GPT-5.4 | `gpt54` | API |
 
-* * *
+## Experiment types
+
+| Key | Meaning |
+|-----|---------|
+| `baseline` | Full image, no modification |
+| `oco_pN` | Object Class Occlusion — occlude the target pathology's own region at strength `N` (`p25`/`p50`/`p75`/`p100`) → probes **direct shortcuts** |
+| `doco_pN` | Co-occurrence Object Class Occlusion — occlude regions of pathologies correlated with the target, target region left intact → probes **contextual shortcuts** |
+| `roco_pN` | Random Object Class Occlusion — occlude random (non-corresponding) regions at the same strength levels, as a control |
+| `ro_pN` | Random Occlusion — occlude random image patches irrespective of disease regions |
+| `all_noise` / `all_noise_mean` | Correlated / mean-noise injection over the full image |
+
+---
 
 ## Usage
 
-### Run a single model
+### Run model inference
 
 ```bash
 python -m src.benchmark.cli \
@@ -124,47 +154,53 @@ python -m src.benchmark.cli \
     --data-json data/padchest-gr/chexpert-by-label/verified_samples.json \
     --data "data/padchest-gr/BIMCV-Padchest-GR/PadChest_GR_images" \
     --experiment baseline \
+    --output-dir outputs \
+    --cache-dir .models_cache \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 10
+    --num-images 100
 ```
 
 Key flags:
 - `--model` — model key from the registry (required)
 - `--data-json` / `--data` — dataset annotation JSON and image directory (required)
-- `--experiment` — experiment name, e.g. `baseline`, `oco_p50`, `roco_p75`, `ro_p50` (required)
+- `--experiment` — experiment name, e.g. `baseline`, `oco_p50`, `doco_p50`, `roco_p75`, `ro_p50` (required)
 - `--output-dir` — results directory (default: `outputs`)
-- `--single-prompt-baseline` — for `--experiment baseline`, share one prompt across all models (writes to `outputs/baseline_SP/`)
-- `--seed` — random seed for OCO/ROCO region selection (default: `3`)
+- `--single-prompt-baseline` — for `--experiment baseline`, share one prompt across models (writes to `outputs/baseline_SP/`)
+- `--seed` — random seed for occlusion region selection (default: `3`)
 
-### Submit SLURM jobs
+### Submit SLURM batch jobs
 
 ```bash
-./scripts/baseline/submit_all.sh          # all models, baseline experiment
-sbatch scripts/baseline/padchest-gr/run_medgemma.sh   # a single model
+# Submit all models for a given experiment family / dataset
+./scripts/baseline/padchest-gr/submit_all.sh
+./scripts/ro/padchest-gr/submit_all.sh
+./scripts/oco/padchest-gr/submit_all.sh
+./scripts/doco/padchest-gr/submit_all.sh
+
+# Or submit an individual model
+sbatch scripts/baseline/padchest-gr/run_medgemma.sh
 ```
 
-Monitor with `squeue -u $USER` and `tail -f logs/**/*.out`.
+Output format: JSONL, one line per sample, at `outputs/<experiment>/<dataset>/<model>.jsonl`:
 
-* * *
+```json
+{
+  "model": "chexone",
+  "model_id": "StanfordAIMI/CheXOne",
+  "prompt": "Analyze this chest X-ray...",
+  "image_path": "data/padchest-gr/.../image.png",
+  "generated_text": "The chest X-ray shows...",
+  "metadata": {}
+}
+```
 
-## Experiments
-
-| Experiment | Description |
-|------------|--------------|
-| `baseline` | Full image, no modification |
-| `oco` | Object Class Occlusion — occludes a specific finding-relevant class (`oco_p25` … `oco_p100`) |
-| `roco` / `ro` | Random(-ized) Object Class Occlusion at matching strength levels |
-| noise | Random or correlated noise injection |
-
-The occlusion strength (e.g. `p50`) controls how much of the target region is masked, letting you trace how report quality degrades as evidence is removed — and whether that degradation tracks the *right* evidence.
-
-* * *
+---
 
 ## Evaluation Metrics
 
-Report-generation metrics (BLEU, ROUGE, BERTScore, F1-RadGraph, CheXbert F1, GREEN) are computed with **[radscore](https://github.com/fruffini/radscore)**, a standalone package maintained alongside this project. It replaces the metric code that used to live in `evaluations/` in this repository.
+Report-generation metrics (BLEU, ROUGE, BERTScore, F1-RadGraph, CheXbert F1, GREEN) are computed with **[radscore](https://github.com/fruffini/radscore)**, a standalone package maintained alongside this project. It replaces the metric code that used to live in `evaluations/` in this repository — that directory is kept only as a pointer to `radscore` and is no longer part of the pipeline.
 
 ### Install
 
@@ -199,51 +235,77 @@ radscore --filepath outputs/baseline/padchest-gr/medgemma.jsonl --compute-green
 
 `radscore` expects a JSON list with `prediction` / `reference` fields (plus an optional 14-element CheXbert `label` vector and `target_category` for per-category breakdowns — see the [radscore README](https://github.com/fruffini/radscore) for the exact schema and the Python API).
 
-> The legacy `evaluations/` pipeline in this repo is kept only for reference during the migration and will be removed from version control once `radscore` fully covers our reporting needs.
+---
 
-* * *
+## Results
 
-## Output Format
+Full sweeps across `RO`, `OCO`, and `DOCO` at perturbation strengths `p ∈ {0, 20, 40, 60, 80, 100}%`, on both PadChest-GR and MIMIC-CXR, are reported in the paper. This section summarizes the headline figures shipped in `figures/`.
 
-Inference results are written as JSONL to `outputs/<experiment>/<dataset>/<model>.jsonl`, one line per sample:
+**Report quality vs. random occlusion** (`figures/ro/`) — F1-RadGraph, and Macro/Micro F1-5 (top-5 diseases) as a function of `RO` strength. CXRMate-ED and MAIRA-2 are the only two models whose scores decline meaningfully as the image is progressively occluded; the rest sit on flat, low-slope curves from 0% to 100% occlusion, indicating little dependence on the actually-visible pixels.
 
-```json
-{
-  "model": "chexone",
-  "model_id": "StanfordAIMI/CheXOne",
-  "prompt": "Analyze this chest X-ray...",
-  "image_path": "data/padchest-gr/.../image.png",
-  "generated_text": "The chest X-ray shows...",
-  "metadata": {}
-}
-```
+<p align="center">
+  <a href="figures/ro/F1_RadGraph.pdf">F1-RadGraph vs. RO (PDF)</a> ·
+  <a href="figures/ro/Macro_F1_5.pdf">Macro F1-5 vs. RO (PDF)</a> ·
+  <a href="figures/ro/Micro_F1_5.pdf">Micro F1-5 vs. RO (PDF)</a>
+</p>
 
-* * *
+**Direct vs. contextual shortcuts** (`figures/lineplot.pdf`) — micro-F1 vs. perturbation ratio for `RO`, `OCO`, and `DOCO`, across 8 models on MIMIC-CXR (top) and PadChest-GR (bottom). `RO` curves stay essentially flat for every model, as expected for a control that removes disease-unrelated evidence. `OCO` produces the steepest drops overall — e.g. on MIMIC-CXR most models fall from ~0.72–0.76 at `p=0` to ~0.28–0.42 at `p=100` — showing that report quality *is* substantially tied to the target region once it's actually removed. `DOCO` sits between the two, confirming that co-occurrence context contributes but matters less than the direct region. Model ranking is architecture-dependent: e.g. CXRMate is consistently the strongest and most stable model on PadChest-GR across all three conditions, while MAIRA-2 has the lowest baseline but a comparatively shallower relative decline under `OCO`.
+
+<p align="center">
+  <a href="figures/lineplot.pdf">μ-F1 vs. Perturbation Ratio, RO/OCO/DOCO (PDF)</a>
+</p>
+
+**Per-pathology breakdown** (`figures/disease_f1.pdf`) — F1-score per disease category, averaged across all evaluated models, comparing `Baseline`, `OCO`, `DOCO`, and `RO` at `p=100%` on MIMIC-CXR (top) and PadChest-GR (bottom). `OCO` is the only condition that meaningfully suppresses detection for most pathologies (e.g. Pleural Effusion drops from ~0.87 to ~0.36 on MIMIC-CXR baseline→OCO), while `DOCO` and `RO` track much closer to the unperturbed baseline — consistent with the direct-shortcut/contextual-shortcut distinction holding at the per-disease level, not just in aggregate.
+
+<p align="center">
+  <a href="figures/disease_f1.pdf">Per-Pathology F1, Baseline/OCO/DOCO/RO (PDF)</a>
+</p>
+
+---
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| CUDA out of memory | Lower `--num-images`, keep `--dtype bfloat16`, request a bigger-memory GPU in the SLURM script |
+| CUDA out of memory | Lower `--num-images`, keep `--dtype bfloat16`; every model in the registry fits in 48GB VRAM at this precision |
 | Import errors | Confirm the correct venv is active and matches the model family table above |
 | Model download fails | Set `HF_TOKEN`, check connectivity, verify `.models_cache` permissions |
 | Submodule not found | `git submodule update --init --recursive`; check with `git submodule status` |
 
-* * *
+---
+
+## Data availability
+
+PadChest-GR and MIMIC-CXR are subject to their own data-use agreements (PhysioNet credentialed access for MIMIC-CXR) and are **not distributed** with this repository. This release contains the full inference, occlusion, and evaluation pipeline, along with placeholder paths that can be pointed at a local copy of either dataset once access has been obtained.
+
+---
 
 ## Citation
 
+If you use this benchmark, please cite:
+
 ```bibtex
-@software{shortcut_rrg_benchmark,
-  title  = {Shortcut Learning in Radiology Report Generation},
-  author = {Ruffini, Filippo},
-  url    = {https://github.com/fruffini/Shortcut-Learning-RRG}
+@article{ruffini2026shovir,
+  title   = {SHOVIR: A Benchmark for Evaluating Vision Shortcut Learning in Radiology Report Generation},
+  author  = {Ruffini, Filippo and Salm{\'e}, Marco and Sicilia, Rosa and Guarrasi, Valerio and Soda, Paolo},
+  journal = {arXiv preprint arXiv:2606.30201},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2606.30201}
 }
 ```
 
+---
+
 ## License
 
-License to be specified.
+All source code, configurations, documentation, and figures in this repository are released under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)** — see [`LICENSE`](LICENSE) for the summary and [creativecommons.org/licenses/by-nc/4.0](https://creativecommons.org/licenses/by-nc/4.0/) for the full legal text.
+
+In short:
+
+- ✅ **Allowed** — academic research, teaching, non-profit clinical research, personal study, modification and redistribution **with attribution** to the authors and a link to the original paper ([arXiv:2606.30201](https://arxiv.org/abs/2606.30201)).
+- ❌ **Not allowed without a separate licence** — incorporation into a commercial product or paid service, use within a for-profit clinical decision-support system, paid consulting whose deliverable is derived from this code, or any other commercial exploitation.
+
+For **commercial licensing** please contact the corresponding authors.
 
 ## Contact
 
