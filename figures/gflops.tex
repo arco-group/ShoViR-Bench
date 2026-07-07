@@ -1,0 +1,17 @@
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{plots/gflops_bubble.pdf}
+  \caption{%
+  Shortcut scores $\Delta = F_1(\mathrm{RO}_{100}) - F_1(\mathrm{exp}_{100})$
+  per model on
+  \textcolor{colorMIMIC}{\textbf{MIMIC-CXR}} (left) and
+  \textcolor{colorPadChest}{\textbf{PadChest-GR}} (right),
+  computed as $\mu\text{-}F_1$ (weighted by class distribution).
+  A positive $\Delta$ indicates that the structured occlusion degrades performance
+  more than random occlusion.
+  \textcolor{colorOCO}{$\Delta_{\mathrm{OCO}}$} reports the effect of
+  Object Class Occlusion (full anatomical region masked),
+  while \textcolor{colorDOCO}{$\Delta_{\mathrm{DOCO}}$} reports the effect of DOCO.
+ }
+  \label{fig:flops}
+\end{figure}
