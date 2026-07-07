@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import random
 import re
 from pathlib import Path
 import numpy as np
@@ -17,11 +18,12 @@ EXPERIMENT_HELP = """
 Experiment types:
   baseline     - No occlusion, process whole image as-is
   oco_pXX      - Object Class Occlusion at XX%% strength (uses annotated bboxes)
+  doco_pXX     - Drop Object Class Occlusion at XX%% strength (like OCO, drops samples without bboxes)
   roco_pXX     - Random Object Class Occlusion at XX%% strength (random bboxes)
   all_noise    - Replace entire image with random noise
   all_noise_mean - Replace entire image with matched correlated noise
 
-Examples: baseline, oco_p50, oco_p100, roco_p25, roco_p75
+Examples: baseline, oco_p50, doco_p100, roco_p25, roco_p75
 """
 
 
@@ -57,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Experiment name for preprocessing. "
             f"Static: {static_experiments}. "
-            "Parametric: oco_pXX, roco_pXX (XX in 0..100)."
+            "Parametric: oco_pXX, doco_pXX, roco_pXX (XX in 0..100)."
         ),
     )
 
@@ -71,8 +73,30 @@ def build_parser() -> argparse.ArgumentParser:
         default="outputs",
         help="Base output directory for assembled output paths",
     )
+    parser.add_argument(
+        "--output-experiment",
+        default=None,
+        help=(
+            "Experiment name to use only for the assembled output path. "
+            "Useful when the preprocessing experiment stays the same but outputs "
+            "should be grouped separately, e.g. shared-prompt runs."
+        ),
+    )
     parser.add_argument("--cache-dir", default="./model_caching")
     parser.add_argument("--prompt-key", default=None)
+    parser.add_argument(
+        "--single-prompt-baseline",
+        action="store_true",
+        help=(
+            "Run the unoccluded baseline with a shared prompt across models and "
+            "write it under the baseline_SP output directory."
+        ),
+    )
+    parser.add_argument(
+        "--shared-prompt-key",
+        default="radiology_minimal",
+        help="Prompt key used by --single-prompt-baseline. Default: radiology_minimal.",
+    )
     parser.add_argument("--max-images", type=int, default=None)
     parser.add_argument("--device", default=None)
     parser.add_argument("--dtype", default=None)
@@ -145,12 +169,30 @@ def _build_output_path(output_dir: str, experiment: str, model_id: str, prompt_k
 
     # For OCO/ROCO experiments, split into experiment_type/percentage format
     # e.g., "oco_p50" -> "oco/p50"
-    if experiment.startswith("oco_") or experiment.startswith("roco_") or experiment.startswith("ro_") :
+    if experiment.startswith(("oco_", "doco_", "roco_", "ro_")):
         exp_parts = experiment.split("_", 1)  # Split into ["oco", "p50"] or ["roco", "p75"]
         if len(exp_parts) == 2:
             return Path(output_dir) / exp_parts[0] / exp_parts[1] / dataset / filename
 
     return Path(output_dir) / experiment / dataset / filename
+
+
+def _sample_has_bboxes(sample: dict) -> bool:
+    """Return True if the sample has at least one non-empty bbox in its regions."""
+    for key in ("disease_regions", "co_occurrence_regions"):
+        regions = sample.get(key)
+        if not isinstance(regions, list):
+            continue
+        elif len(regions) == 0: 
+            return False
+        else: 
+            for region in regions:
+                if not isinstance(region, dict):
+                    continue
+                bbox = region.get("bbox")
+                if not (isinstance(bbox, list) and len(bbox) > 0):
+                    return False
+    return True
 
 
 def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_name: str, experiment: str) -> dict:
@@ -170,7 +212,7 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
     Returns:
         Dictionary mapping sample_id to sample data
     """
-    if dataset_name == "padchest-gr" and (experiment.startswith("oco") or experiment.startswith("ro")):
+    if dataset_name == "padchest-gr" and (experiment.startswith(("oco", "doco", "ro"))):
         # For OCO/ROCO experiments with padchest-gr, load all chexpert class files
         # excluding categories with less than 50 images
         # Navigate up to padchest-gr level: data_dir is .../BIMCV-Padchest-GR /PadChest_GR_images
@@ -207,10 +249,55 @@ def _resolve_experiment_dataset(data_json_path: str, data_dir: Path, dataset_nam
                             sample_copy = dict(sample)
                             sample_copy["target_category"] = category
                             dataset[composite_key] = sample_copy
+
+    elif dataset_name == "mimic-cxr-jpg" and (experiment.startswith(("oco", "doco", "ro"))):
+        chexpert_dir = Path(data_json_path).parent / "classes_jsons"
+
+        valid_categories = [
+            "Atelectasis",
+            "Cardiomegaly",
+            "Consolidation",
+            "Edema",
+            "Enlarged_Cardiomediastinum",
+            "Fracture",
+            "Lung_Lesion",
+            "Lung_Opacity",
+            "Pleural_Effusion",
+            "Pleural_Other",
+            "Pneumonia",
+            "Pneumothorax",
+            "Support_Devices",
+        ]
+
+        dataset = {}
+        for category in valid_categories:
+            category_file = chexpert_dir / f"{category}_samples_filtered.json"
+            if category_file.exists():
+                with category_file.open("r", encoding="utf-8") as f:
+                    category_data = json.load(f)
+                    if isinstance(category_data, list):
+                        for sample in category_data:
+                            composite_key = f"{sample['img_path']}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
+                    else:
+                        for key, sample in category_data.items():
+                            composite_key = f"{key}::{category}"
+                            sample_copy = dict(sample)
+                            sample_copy["target_category"] = category
+                            dataset[composite_key] = sample_copy
     else:
         # For baseline or other datasets, use the provided data_json file as usual
         with Path(data_json_path).open("r", encoding="utf-8") as f:
             dataset = json.load(f)
+
+    # DOCO: drop samples that don't have any valid bboxes
+    if experiment.startswith("doco"):
+        before = len(dataset)
+        dataset = {k: v for k, v in dataset.items() if _sample_has_bboxes(v)}
+        after = len(dataset)
+        print(f"[DOCO] Dropped {before - after}/{before} samples without other diseas bboxes ({after} remaining)")
 
     return dataset
 
@@ -220,7 +307,16 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     spec = MODEL_SPECS[args.model]
+
+    if args.single_prompt_baseline:
+        if args.experiment != "baseline":
+            parser.error("--single-prompt-baseline can only be used with --experiment baseline")
+        if args.prompt_key is not None and args.prompt_key != args.shared_prompt_key:
+            parser.error("--single-prompt-baseline sets --prompt-key; use --shared-prompt-key to choose it")
+        args.prompt_key = args.shared_prompt_key
+
     prompt_key = args.prompt_key or spec.prompt_key
+    output_experiment = args.output_experiment or ("baseline_SP" if args.single_prompt_baseline else args.experiment)
 
     # Set random seed for reproducible bbox selection
     np.random.seed(args.seed)
@@ -232,7 +328,7 @@ def main() -> int:
     output_path = (
         Path(args.output)
         if args.output is not None
-        else _build_output_path(args.output_dir, args.experiment, spec.model_id, prompt_key, dataset_name, args.seed)
+        else _build_output_path(args.output_dir, output_experiment, spec.model_id, prompt_key, dataset_name, args.seed)
     )
     print('remote code: ', args.trust_remote_code)
     config = BenchmarkConfig(
@@ -240,7 +336,6 @@ def main() -> int:
         data_dir=Path(args.data),
         experiment=args.experiment,
         output_path=output_path,
-#        data_json=Path(args.data_json) if args.data_json else None,
         cache_dir=Path(args.cache_dir),
         prompt_key=args.prompt_key,
         max_images=args.max_images,
@@ -249,6 +344,7 @@ def main() -> int:
         trust_remote_code=args.trust_remote_code,
         filter_labels=args.filter_labels,
         num_images=args.num_images,
+        seed=args.seed,
     )
 
     # Set random seed for reproducible bbox selection

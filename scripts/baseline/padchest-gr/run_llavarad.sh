@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 01:30:00
+#SBATCH -t 07:30:00
 #SBATCH --gpus-per-node=A40:1
 #SBATCH -J llavarad_baseline
 #SBATCH -o logs/baseline/llavarad_%j.out
@@ -13,6 +13,8 @@
 
 set -euo pipefail
 
+EXTRA_ARGS="${1:-}"
+
 echo "=== LLaVA-Rad Baseline ==="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURMD_NODENAME"
@@ -20,6 +22,7 @@ echo "Start time: $(date)"
 echo ""
 
 # Load Python module
+module purge
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate virtual environment
@@ -54,7 +57,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 24
+    --num-images 4 \
+    ${EXTRA_ARGS}
 
 echo ""
 echo "=== Job Complete ==="

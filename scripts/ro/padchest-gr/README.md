@@ -58,6 +58,9 @@ bash scripts/ro/padchest-gr/run_medgemma.sh ro_p25 3
 ## Monitor & Cancel
 
 ```bash
+# Check experiment status (SLURM + output files)
+./scripts/ro/status.sh
+
 # Check running jobs
 squeue -u $USER
 

@@ -38,8 +38,15 @@ PROMPTS = {
     "cxrmateed_default": (
         ""
     ),
+    "gemini_default": (
+        "You are an expert radiologist. Write the findings section of a chest X-ray radiology report. "
+        "Be concise, precise, and use standard radiological terminology."
+    ),
+    "gpt54_default": (
+        "You are an expert radiologist. Write the findings section of a chest X-ray radiology report. "
+        "Be concise, precise, and use standard radiological terminology."
+    ),
     "radiology_minimal": (
-    "Generate a complete radiology report for this image."
+        "Describe the radiographic findings in this chest X-ray."
     ),
 }
-

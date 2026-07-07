@@ -114,7 +114,8 @@ class BaseHFLM(abc.ABC):
         user_text: str = "Analyze this image.",
         drop_config: dict[str, object] | None = None,
     ) -> list[dict[str, str]]:
-        model, processor = self._ensure_loaded()
+        loaded = self._ensure_loaded()
+        model, processor = loaded[0], loaded[1]
 
         # Build each conversation independently
         all_messages = [
@@ -222,7 +223,8 @@ class BaseHFLM(abc.ABC):
         user_text: str = "Analyze this image.",
         drop_config: dict[str, object] | None = None,
     ):
-        model, processor = self._ensure_loaded()
+        loaded = self._ensure_loaded()
+        model, processor = loaded[0], loaded[1]
         inputs, input_len = self.build_chat_inputs(
             processor,
             image,

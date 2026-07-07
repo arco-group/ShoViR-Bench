@@ -15,6 +15,7 @@ set -euo pipefail
 
 EXPERIMENT="${1:-ro_p100}"
 SEED="${2:-3}"
+EXTRA_ARGS="${3:-}"
 
 echo "=== NV-Reason-CXR Random Occlusion ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -23,7 +24,7 @@ echo "Experiment: ${EXPERIMENT}"
 echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
-
+module purge
 module load Python/3.11.5-GCCcore-13.2.0
 source .venv_nv/bin/activate
 
@@ -52,7 +53,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 128
+    --num-images 128 \
+    ${EXTRA_ARGS}
 
 echo ""
 echo "=== Job Complete ==="

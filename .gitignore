@@ -28,6 +28,7 @@ results/
 .radialog_venv/
 evaluations/results
 evaluations/concat_results.py
+evaluations/concat_results2.py
 
 # Legacy evaluation pipeline, superseded by https://github.com/fruffini/radscore
 evaluations/rrg_eval/
@@ -35,3 +36,6 @@ evaluations/run_eval.py
 evaluations/run_eval_chexbert_class.py
 evaluations/green_evaluation.py
 evaluations/predictions_rrg_eval.json
+
+.gpt54_key
+.gemini_key

@@ -56,7 +56,7 @@ class CXRMateED(BaseHFLM):
             output_ids = model.generate(
                 pixel_values=images_tensor.to(device=self.device),
                 max_length=self.generation_max_tokens,
-                num_beams=1,
+                num_beams=4,
                 bad_words_ids=[[tokenizer.convert_tokens_to_ids('[NF]')], [tokenizer.convert_tokens_to_ids('[NI]')]],
             )
         findings, impression = model.split_and_decode_sections(output_ids, tokenizer)

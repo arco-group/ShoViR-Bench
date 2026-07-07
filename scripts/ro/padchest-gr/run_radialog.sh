@@ -15,6 +15,7 @@ set -euo pipefail
 
 EXPERIMENT="${1:-ro_p100}"
 SEED="${2:-3}"
+EXTRA_ARGS="${3:-}"
 
 echo "=== RaDialog Random Occlusion ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -23,13 +24,14 @@ echo "Experiment: ${EXPERIMENT}"
 echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
-
+module purge
 module load Python/3.11.5-GCCcore-13.2.0
 source .radialog_venv/bin/activate
 
 export HF_HOME="${PWD}/.models_cache"
 export HF_TOKEN="${HF_TOKEN:-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}"
 export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
+
 
 mkdir -p logs/ro
 
@@ -52,7 +54,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 32
+    --num-images 32 \
+    ${EXTRA_ARGS}
 
 echo ""
 echo "=== Job Complete ==="

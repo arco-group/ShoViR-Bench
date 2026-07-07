@@ -1,0 +1,227 @@
+{
+  "_info": "Label offsets in typographic points from the data point. +x = right, -x = left, +y = up, -y = down. Edit values and re-run the script to reposition labels.",
+  "mimic-cxr-jpg": {
+    "A": {
+      "_panel": "Panel A \u2014 Prevalence vs. Direct Grounding (OCO)",
+      "Enl. Card.": [
+        10,
+        10
+      ],
+      "Cardiomegaly": [
+        10,
+        10
+      ],
+      "Lung Opacity": [
+        10,
+        10
+      ],
+      "Lung Lesion": [
+        10,
+        10
+      ],
+      "Edema": [
+        10,
+        10
+      ],
+      "Consolidation": [
+        10,
+        10
+      ],
+      "Pneumonia": [
+        10,
+        10
+      ],
+      "Atelectasis": [
+        10,
+        10
+      ],
+      "Pneumothorax": [
+        10,
+        10
+      ],
+      "Pleural Eff.": [
+        10,
+        10
+      ],
+      "Pleural Other": [
+        10,
+        10
+      ],
+      "Fracture": [
+        10,
+        10
+      ],
+      "Support Dev.": [
+        10,
+        10
+      ]
+    },
+    "B": {
+      "_panel": "Panel B \u2014 Prevalence vs. Baseline Performance",
+      "Enl. Card.": [
+        10,
+        10
+      ],
+      "Cardiomegaly": [
+        10,
+        10
+      ],
+      "Lung Opacity": [
+        10,
+        10
+      ],
+      "Lung Lesion": [
+        10,
+        10
+      ],
+      "Edema": [
+        10,
+        10
+      ],
+      "Consolidation": [
+        10,
+        10
+      ],
+      "Pneumonia": [
+        10,
+        10
+      ],
+      "Atelectasis": [
+        10,
+        10
+      ],
+      "Pneumothorax": [
+        10,
+        10
+      ],
+      "Pleural Eff.": [
+        10,
+        10
+      ],
+      "Pleural Other": [
+        10,
+        10
+      ],
+      "Fracture": [
+        10,
+        10
+      ],
+      "Support Dev.": [
+        10,
+        10
+      ]
+    }
+  },
+  "padchest-gr": {
+    "A": {
+      "_panel": "Panel A \u2014 Prevalence vs. Direct Grounding (OCO)",
+      "Enl. Card.": [
+        -65,
+        4
+      ],
+      "Cardiomegaly": [
+        10,
+        -14
+      ],
+      "Lung Opacity": [
+        10,
+        4
+      ],
+      "Lung Lesion": [
+        10,
+        -12
+      ],
+      "Edema": [
+        10,
+        4
+      ],
+      "Consolidation": [
+        10,
+        -8
+      ],
+      "Pneumonia": [
+        -70,
+        4
+      ],
+      "Atelectasis": [
+        10,
+        -12
+      ],
+      "Pneumothorax": [
+        10,
+        4
+      ],
+      "Pleural Eff.": [
+        -55,
+        6
+      ],
+      "Pleural Other": [
+        10,
+        4
+      ],
+      "Fracture": [
+        -65,
+        -8
+      ],
+      "Support Dev.": [
+        10,
+        4
+      ]
+    },
+    "B": {
+      "_panel": "Panel B \u2014 Prevalence vs. Baseline Performance",
+      "Enl. Card.": [
+        -65,
+        4
+      ],
+      "Cardiomegaly": [
+        10,
+        -14
+      ],
+      "Lung Opacity": [
+        10,
+        4
+      ],
+      "Lung Lesion": [
+        10,
+        -12
+      ],
+      "Edema": [
+        10,
+        4
+      ],
+      "Consolidation": [
+        -70,
+        -8
+      ],
+      "Pneumonia": [
+        -65,
+        4
+      ],
+      "Atelectasis": [
+        10,
+        4
+      ],
+      "Pneumothorax": [
+        10,
+        4
+      ],
+      "Pleural Eff.": [
+        -65,
+        -10
+      ],
+      "Pleural Other": [
+        10,
+        4
+      ],
+      "Fracture": [
+        -65,
+        -8
+      ],
+      "Support Dev.": [
+        10,
+        -12
+      ]
+    }
+  }
+}

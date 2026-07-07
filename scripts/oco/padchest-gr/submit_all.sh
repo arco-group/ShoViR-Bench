@@ -1,0 +1,129 @@
+#!/bin/bash
+# Submit all OCO (Object Class Occlusion) jobs to SLURM
+# Usage: ./scripts/oco/padchest-gr/submit_all.sh --experiment oco_p50 --seed 3 [--dry-run]
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+
+cd "$PROJECT_DIR"
+
+# Defaults
+EXPERIMENT="oco_p100"
+SEED="3"
+DRY_RUN=false
+SKIP_EXISTING=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --experiment) EXPERIMENT="$2"; shift 2 ;;
+        --seed) SEED="$2"; shift 2 ;;
+        --dry-run) DRY_RUN=true; shift ;;
+        --skip-existing) SKIP_EXISTING=true; shift ;;
+        *) echo "Unknown argument: $1"; echo "Usage: $0 --experiment oco_pXX --seed N [--dry-run] [--skip-existing]"; exit 1 ;;
+    esac
+done
+
+# Create log directory
+mkdir -p logs/oco
+
+# ---------------------------------------------------------------------------
+# Output-existence check (used by --skip-existing).
+# Maps model key -> search pattern inside output filenames.
+# nv_reason_cxr is special: CLI writes files named *nv_reason* not *nv_reason_cxr*.
+# ---------------------------------------------------------------------------
+declare -A _MODEL_PATTERN=(
+    ["medgemma"]="medgemma"   ["maira2"]="maira2"
+    ["chexagent"]="chexagent" ["chexone"]="chexone"
+    ["libra"]="libra"         ["cxrmateed"]="cxrmateed"
+    ["nv_reason_cxr"]="nv_reason"
+    ["radialog"]="radialog"   ["llavarad"]="llavarad"
+    ["gpt54"]="gpt-5.4"
+    ["gemini"]="gemini-2.0-flash"
+)
+_output_exists() {   # _output_exists <model> <experiment> <seed>
+    local model="$1" exp="$2" seed="${3:-3}"
+    local pat="${_MODEL_PATTERN[$model]:-$model}"
+    local dir
+    if [[ "$exp" =~ ^(oco|doco|roco|ro)_(.+)$ ]]; then
+        dir="outputs/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/padchest-gr"
+    else
+        dir="outputs/${exp}/padchest-gr"
+    fi
+    compgen -G "${dir}/*${pat}*::seed=${seed}.json" > /dev/null 2>&1
+}
+
+if $DRY_RUN; then
+    echo "=== DRY RUN MODE ==="
+    echo ""
+fi
+
+echo "=== PadChest-GR Object Class Occlusion Experiments ==="
+echo "Project: ${PROJECT_DIR}"
+echo "Experiment: ${EXPERIMENT}"
+echo "Seed: ${SEED}"
+echo "Data: data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images"
+echo "Data JSON: data/padchest-gr/chexpert-by-label/verified_samples.json"
+echo ""
+
+# Models to run
+MODELS=(
+    "medgemma"
+    "maira2"
+    "chexagent"
+    #"chexone"
+    "libra"
+    "cxrmateed"
+    "nv_reason_cxr"
+    "radialog"
+    "llavarad"
+    "gpt54"
+    "gemini"
+)
+
+echo "Models to run:"
+for model in "${MODELS[@]}"; do
+    echo "  - ${model}"
+done
+echo ""
+
+# Submit jobs
+echo "Submitting jobs..."
+JOB_IDS=()
+
+for model in "${MODELS[@]}"; do
+    script="scripts/oco/padchest-gr/run_${model}.sh"
+
+    if [[ ! -f "$script" ]]; then
+        echo "  [SKIP] $model - script not found: $script"
+        continue
+    fi
+
+    if $SKIP_EXISTING && _output_exists "$model" "$EXPERIMENT" "$SEED"; then
+        echo "  [SKIP] $model - output already exists (${EXPERIMENT}, seed=${SEED})"
+        continue
+    fi
+
+    if $DRY_RUN; then
+        echo "  [DRY] Would submit: sbatch $script $EXPERIMENT $SEED"
+    else
+        job_id=$(sbatch --parsable "$script" "$EXPERIMENT" "$SEED")
+        JOB_IDS+=("$job_id")
+        echo "  [OK] $model - Job ID: $job_id"
+    fi
+done
+
+echo ""
+if ! $DRY_RUN && [[ ${#JOB_IDS[@]} -gt 0 ]]; then
+    echo "=== Submitted ${#JOB_IDS[@]} jobs ==="
+    echo "Job IDs: ${JOB_IDS[*]}"
+    echo ""
+    echo "Monitor with:"
+    echo "  squeue -u \$USER"
+    echo "  tail -f logs/oco/*.out"
+    echo ""
+    echo "Cancel all with:"
+    echo "  scancel ${JOB_IDS[*]}"
+fi

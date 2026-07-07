@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Iterable, List
 
 from PIL import Image
+
+
+def get_tmp_dir() -> Path:
+    """Return a suitable temporary directory for large intermediate files.
+
+    Priority:
+      1. $TMPDIR  — set by SLURM per job (e.g. /local/tmp.<jobid>)
+      2. ./.tmp   — fallback in the current working directory
+    """
+    tmpdir = os.environ.get("TMPDIR")
+    if tmpdir:
+        p = Path(tmpdir)
+        if p.exists():
+            return p
+    p = Path(".tmp")
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
