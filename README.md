@@ -29,6 +29,14 @@
 
 ---
 
+<p align="center">
+  <img src="figures/METHOD-RRG.png" alt="SHOVIR benchmark framework: data collection, occlusion experiments, VLM inference, and multi-axis evaluation" width="900"/>
+</p>
+
+<p align="center"><em>The SHOVIR benchmark framework — disease-annotated data collection (ImageGenome, PadChest-GR), controlled occlusion experiments (baseline, full-noise, object-class, co-occurrence, and random occlusion), VLM inference over the perturbed images, and a multi-axis evaluation (NLP, clinical, and shortcut metrics).</em></p>
+
+---
+
 ## Overview
 
 This repository accompanies the paper *"SHOVIR: A Benchmark for Evaluating Vision Shortcut Learning in Radiology Report Generation"* ([arXiv:2606.30201](https://arxiv.org/abs/2606.30201)).
