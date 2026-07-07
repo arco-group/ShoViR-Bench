@@ -1,5 +1,7 @@
 # Setup
 
+> **Deprecated.** Metrics computation has moved to [radscore](https://github.com/fruffini/radscore), a standalone package. See the [Evaluation Metrics](../README.md#evaluation-metrics) section of the top-level README for install and usage instructions. The pipeline below is kept only for reference during the migration.
+
 This project is tested with **Python 3.10.4**. 
 
 ## 1) Create and activate a virtual environment (Python 3.10.4)
