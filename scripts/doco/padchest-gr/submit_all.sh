@@ -40,6 +40,8 @@ declare -A _MODEL_PATTERN=(
     ["libra"]="libra"         ["cxrmateed"]="cxrmateed"
     ["nv_reason_cxr"]="nv_reason"
     ["radialog"]="radialog"   ["llavarad"]="llavarad"
+    ["gpt54"]="gpt-5.4"
+    ["gemini"]="gemini-2.0-flash"
 )
 _output_exists() {   # _output_exists <model> <experiment> <seed>
     local model="$1" exp="$2" seed="${3:-3}"
@@ -79,6 +81,8 @@ MODELS=(
     "nv_reason_cxr"
     "radialog"
     "llavarad"
+    "gpt54"
+    "gemini"
 )
 
 echo "Models to run:"

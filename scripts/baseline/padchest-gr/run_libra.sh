@@ -56,7 +56,7 @@ python -m src.benchmark.cli \
     --cache-dir .models_cache \
     --device cuda:0 \
     --dtype bfloat16 \
-    --num-images 24 \
+    --num-images 20 \
     ${EXTRA_ARGS}
 
 echo ""

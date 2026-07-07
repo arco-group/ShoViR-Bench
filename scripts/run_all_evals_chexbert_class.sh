@@ -14,6 +14,7 @@
 # Runner-specific flags:
 #   --dry-run              Preview commands without running
 #   --experiment <name>    Only evaluate files from this experiment (must be one of: doco, oco, ro)
+#   --model <pattern>      Only evaluate files matching this pattern in filename (e.g. gpt-5.4, gemini, medgemma)
 #   --parallel <N>         Max parallel evaluations (default: 4)
 #
 # All run_eval_chexbert_class.py flags are forwarded:
@@ -27,6 +28,8 @@
 # Usage:
 #   sbatch scripts/run_all_evals_chexbert_class.sh                          # run doco+oco+ro, per-file
 #   sbatch scripts/run_all_evals_chexbert_class.sh --experiment ro          # only ro experiment
+#   sbatch scripts/run_all_evals_chexbert_class.sh --model gpt-5.4          # only GPT-5.4 outputs
+#   sbatch scripts/run_all_evals_chexbert_class.sh --model gemini --experiment ro  # Gemini, ro only
 #   sbatch scripts/run_all_evals_chexbert_class.sh --bootstrap-ci           # with CI
 #   bash   scripts/run_all_evals_chexbert_class.sh --dry-run                # preview
 #   bash   scripts/run_all_evals_chexbert_class.sh --experiment oco --dry-run
@@ -38,6 +41,7 @@ set -euo pipefail
 # ---------------------
 DRY_RUN=false
 FILTER_EXPERIMENT=""
+FILTER_MODEL=""
 MAX_PARALLEL=4
 
 # run_eval_chexbert_class.py arguments (with defaults matching the script)
@@ -53,6 +57,7 @@ while [[ $# -gt 0 ]]; do
         # Runner-specific flags
         --dry-run)            DRY_RUN=true; shift ;;
         --experiment)         FILTER_EXPERIMENT="$2"; shift 2 ;;
+        --model)              FILTER_MODEL="$2"; shift 2 ;;
         --parallel)           MAX_PARALLEL="$2"; shift 2 ;;
         # run_eval_chexbert_class.py flags (with value)
         --output-mode)        OUTPUT_MODE="$2"; shift 2 ;;
@@ -121,6 +126,7 @@ echo "============================================"
 echo "Project:       ${PROJECT_DIR}"
 echo "Outputs dir:   ${OUTPUTS_DIR}"
 echo "Experiments:   ${FILTER_EXPERIMENT:-doco+oco+ro}"
+echo "Filter model:  ${FILTER_MODEL:-all}"
 echo "Parallel:      ${MAX_PARALLEL}"
 echo "Dry run:       ${DRY_RUN}"
 echo ""
@@ -152,6 +158,18 @@ for f in "${ALL_FILES[@]}"; do
     fi
 done
 ALL_FILES=("${FILTERED[@]}")
+
+# Filter by model pattern if requested (matches against filename)
+if [[ -n "$FILTER_MODEL" ]]; then
+    FILTERED=()
+    for f in "${ALL_FILES[@]}"; do
+        filename=$(basename "$f")
+        if [[ "$filename" == *"${FILTER_MODEL}"* ]]; then
+            FILTERED+=("$f")
+        fi
+    done
+    ALL_FILES=("${FILTERED[@]}")
+fi
 
 # Skip existing results if requested
 if $SKIP_EXISTING; then

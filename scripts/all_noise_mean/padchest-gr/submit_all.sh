@@ -1,6 +1,6 @@
 #!/bin/bash
 # Submit all all_noise_mean jobs to SLURM
-# Usage: ./scripts/all_noise_mean/padchest-gr/submit_all.sh [--dry-run]
+# Usage: ./scripts/all_noise_mean/padchest-gr/submit_all.sh [--dry-run] [--skip-existing] [--one-prompt]
 
 set -euo pipefail
 
@@ -16,14 +16,21 @@ mkdir -p logs/all_noise_mean
 DRY_RUN=false
 SKIP_EXISTING=false
 EXPERIMENT="all_noise_mean"
+OUTPUT_EXPERIMENT="${EXPERIMENT}"
 SEED="3"
+EXTRA_ARG_STRING=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true; shift ;;
         --skip-existing) SKIP_EXISTING=true; shift ;;
-        *) echo "Unknown argument: $1"; echo "Usage: $0 [--dry-run] [--skip-existing]"; exit 1 ;;
+        --one-prompt|--single-prompt)
+            OUTPUT_EXPERIMENT="all_noise_mean_SP"
+            EXTRA_ARG_STRING="--prompt-key radiology_minimal --output-experiment ${OUTPUT_EXPERIMENT}"
+            shift
+            ;;
+        *) echo "Unknown argument: $1"; echo "Usage: $0 [--dry-run] [--skip-existing] [--one-prompt]"; exit 1 ;;
     esac
 done
 
@@ -33,11 +40,13 @@ done
 # nv_reason_cxr is special: CLI writes files named *nv_reason* not *nv_reason_cxr*.
 # ---------------------------------------------------------------------------
 declare -A _MODEL_PATTERN=(
-    ["medgemma"]="medgemma"   ["maira2"]="maira2"
+    ["medgemma"]="medgemma"   ["maira2"]="maira"
     ["chexagent"]="chexagent" ["chexone"]="chexone"
-    ["libra"]="libra"         ["cxrmateed"]="cxrmateed"
-    ["nv_reason_cxr"]="nv_reason"
+    ["libra"]="libra"         ["cxrmateed"]="cxrmate"
+    ["nv_reason_cxr"]="nv-reason"
     ["radialog"]="radialog"   ["llavarad"]="llavarad"
+    ["gpt54"]="gpt-5.4"
+    ["gemini"]="gemini-2.0-flash"
 )
 _output_exists() {   # _output_exists <model> <experiment> <seed>
     local model="$1" exp="$2" seed="${3:-3}"
@@ -48,7 +57,7 @@ _output_exists() {   # _output_exists <model> <experiment> <seed>
     else
         dir="outputs/${exp}/padchest-gr"
     fi
-    compgen -G "${dir}/*${pat}*::seed=${seed}.json" > /dev/null 2>&1
+    find "$dir" -maxdepth 1 -iname "*${pat}*::seed=${seed}.json" 2>/dev/null | grep -q .
 }
 
 if $DRY_RUN; then
@@ -58,9 +67,14 @@ fi
 
 echo "=== PadChest-GR All Noise Mean Experiments ==="
 echo "Project: ${PROJECT_DIR}"
+echo "Experiment: ${EXPERIMENT}"
+echo "Output experiment: ${OUTPUT_EXPERIMENT}"
 echo "Data: data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images"
 echo "Data JSON: data/padchest-gr/chexpert-by-label/verified_samples.json"
-echo "Output: outputs/all_noise_mean/padchest-gr/"
+echo "Output: outputs/${OUTPUT_EXPERIMENT}/padchest-gr/"
+if [[ -n "$EXTRA_ARG_STRING" ]]; then
+    echo "Extra CLI args: ${EXTRA_ARG_STRING}"
+fi
 echo ""
 
 # Models to run
@@ -74,6 +88,8 @@ MODELS=(
     "nv_reason_cxr"
     "radialog"
     "llavarad"
+    "gpt54"
+    "gemini"
 )
 
 echo "Models to run all_noise_mean:"
@@ -94,15 +110,15 @@ for model in "${MODELS[@]}"; do
         continue
     fi
 
-    if $SKIP_EXISTING && _output_exists "$model" "$EXPERIMENT" "$SEED"; then
+    if $SKIP_EXISTING && _output_exists "$model" "$OUTPUT_EXPERIMENT" "$SEED"; then
         echo "  [SKIP] $model - output already exists (seed=${SEED})"
         continue
     fi
 
     if $DRY_RUN; then
-        echo "  [DRY] Would submit: sbatch $script"
+        echo "  [DRY] Would submit: sbatch $script ${EXTRA_ARG_STRING}"
     else
-        job_id=$(sbatch --parsable "$script")
+        job_id=$(sbatch --parsable "$script" "$EXTRA_ARG_STRING")
         JOB_IDS+=("$job_id")
         echo "  [OK] $model - Job ID: $job_id"
     fi

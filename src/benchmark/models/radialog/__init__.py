@@ -105,13 +105,13 @@ class RaDialog(BaseHFLM):
 
         # Build conversation
         conv = conv_vicuna_v1.copy()
-        report_gen_prompt = (
-            f"<image>. Predicted Findings: {findings}. "
+        instruction = prompt_text.strip() or (
             "You are to act as a radiologist and write the finding section of a chest x-ray "
             "radiology report for this X-ray image and the given predicted findings. "
             "Write in the style of a radiologist, write one fluent text without enumeration, "
             "be concise and don't provide explanations or reasons."
         )
+        report_gen_prompt = f"<image>. Predicted Findings: {findings}. {instruction}"
 
         conv.append_message("USER", report_gen_prompt)
         conv.append_message("ASSISTANT", None)
@@ -180,13 +180,13 @@ class RaDialog(BaseHFLM):
             findings_str = ', '.join(findings).lower().strip()
 
             conv = conv_vicuna_v1.copy()
-            report_gen_prompt = (
-                f"<image>. Predicted Findings: {findings_str}. "
+            instruction = prompt_text.strip() or (
                 "You are to act as a radiologist and write the finding section of a chest x-ray "
                 "radiology report for this X-ray image and the given predicted findings. "
                 "Write in the style of a radiologist, write one fluent text without enumeration, "
                 "be concise and don't provide explanations or reasons."
             )
+            report_gen_prompt = f"<image>. Predicted Findings: {findings_str}. {instruction}"
             conv.append_message("USER", report_gen_prompt)
             conv.append_message("ASSISTANT", None)
             text_input = conv.get_prompt()

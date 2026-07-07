@@ -6,9 +6,6 @@
 #SBATCH -J chexagent_ro
 #SBATCH -o logs/ro/chexagent_%j.out
 #SBATCH -e logs/ro/chexagent_%j.err
-# Mail me
-#SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=marco.salme@unicampus.it
 
 # CheXagent Random Occlusion Experiment
 # Model: StanfordAIMI/CheXagent-2-3b (8B parameters)
@@ -16,8 +13,9 @@
 
 set -euo pipefail
 
-EXPERIMENT="baseline"
+EXPERIMENT="${1:-baseline}"
 SEED="${2:-3}"
+EXTRA_ARGS=("${@:3}")
 
 echo "=== CheXagent Random Occlusion ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -28,7 +26,8 @@ echo "Start time: $(date)"
 echo ""
 
 # Load Python module
-module load Python/3.11.3-GCCcore-12.3.0
+module purge
+module load Python/3.11.5-GCCcore-13.2.0
 
 source .venv_chexagent/bin/activate
 
@@ -59,7 +58,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 40 
+    --num-images 40 \
+    "${EXTRA_ARGS[@]}"
 echo ""
 echo "=== Job Complete ==="
 echo "End time: $(date)"

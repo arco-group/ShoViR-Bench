@@ -16,6 +16,7 @@ mkdir -p logs/baseline
 DRY_RUN=false
 SKIP_EXISTING=false
 EXPERIMENT="baseline"
+OUTPUT_EXPERIMENT="baseline"
 SEED="3"
 EXTRA_ARGS=""
 
@@ -25,7 +26,7 @@ while [[ $# -gt 0 ]]; do
         --dry-run) DRY_RUN=true; shift ;;
         --skip-existing) SKIP_EXISTING=true; shift ;;
         --single-prompt-baseline)
-            EXPERIMENT="baseline_SP"
+            OUTPUT_EXPERIMENT="baseline_SP"
             EXTRA_ARGS="--single-prompt-baseline"
             shift
             ;;
@@ -39,11 +40,13 @@ done
 # nv_reason_cxr is special: CLI writes files named *nv_reason* not *nv_reason_cxr*.
 # ---------------------------------------------------------------------------
 declare -A _MODEL_PATTERN=(
-    ["medgemma"]="medgemma"   ["maira2"]="maira2"
-    ["chexagent"]="chexagent" ["chexone"]="chexone"
-    ["libra"]="libra"         ["cxrmateed"]="cxrmateed"
-    ["nv_reason_cxr"]="nv_reason"
-    ["radialog"]="radialog"   ["llavarad"]="llavarad"
+    ["medgemma"]="medgemma"   ["maira2"]="maira-2"
+    ["chexagent"]="CheXagent" ["chexone"]="chexone"
+    ["libra"]="libra"         ["cxrmateed"]="cxrmate"
+    ["nv_reason_cxr"]="NV-Reason"
+    ["radialog"]="RaDialog"   ["llavarad"]="llava"
+    ["gpt54"]="gpt-5.4"
+    ["gemini"]="gemini-2.0-flash"
 )
 _output_exists() {   # _output_exists <model> <experiment> <seed>
     local model="$1" exp="$2" seed="${3:-3}"
@@ -66,7 +69,7 @@ echo "=== PadChest-GR Baseline Experiments ==="
 echo "Project: ${PROJECT_DIR}"
 echo "Data: data/padchest-gr/BIMCV-Padchest-GR /PadChest_GR_images"
 echo "Data JSON: data/padchest-gr/chexpert-by-label/verified_samples.json"
-echo "Output: outputs/${EXPERIMENT}/padchest-gr/"
+echo "Output: outputs/${OUTPUT_EXPERIMENT}/padchest-gr/"
 if [[ -n "$EXTRA_ARGS" ]]; then
     echo "Extra CLI args: ${EXTRA_ARGS}"
 fi
@@ -83,6 +86,8 @@ MODELS=(
     "nv_reason_cxr"
     "radialog"
     "llavarad"
+    "gpt54"
+    "gemini"
 )
 
 echo "Models to run baseline:"
@@ -103,8 +108,8 @@ for model in "${MODELS[@]}"; do
         continue
     fi
 
-    if $SKIP_EXISTING && _output_exists "$model" "$EXPERIMENT" "$SEED"; then
-        echo "  [SKIP] $model - output already exists (seed=${SEED})"
+    if $SKIP_EXISTING && _output_exists "$model" "$OUTPUT_EXPERIMENT" "$SEED"; then
+        echo "  [SKIP] $model - output already exists (${OUTPUT_EXPERIMENT}, seed=${SEED})"
         continue
     fi
 

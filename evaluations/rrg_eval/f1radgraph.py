@@ -5,6 +5,7 @@ Custom f1 radgraph that can output precision and recall
 from radgraph import F1RadGraph
 import numpy as np
 from scipy.stats import bootstrap
+import torch
 
 import os
 from radgraph.radgraph import CACHE_DIR
@@ -12,6 +13,8 @@ from huggingface_hub import hf_hub_download
 
 
 class F1RadGraphv2(F1RadGraph):
+    DEFAULT_INFERENCE_CHUNK_SIZE = 64
+
     def __init__(
             self,
             reward_level,
@@ -39,7 +42,7 @@ class F1RadGraphv2(F1RadGraph):
 
         if isinstance(hyps, str):
             hyps = [hyps]
-        if isinstance(hyps, str):
+        if isinstance(refs, str):
             refs = [refs]
 
         assert len(refs) == len(hyps)
@@ -63,7 +66,7 @@ class F1RadGraphv2(F1RadGraph):
         assert len(report_list) == 2 * number_of_non_empty_reports
 
         # getting annotations
-        inference_dict = self.radgraph(report_list)
+        inference_dict = self._run_radgraph_in_chunks(report_list)
 
         # Compute reward
         reward_list = []
@@ -107,6 +110,30 @@ class F1RadGraphv2(F1RadGraph):
             hypothesis_annotation_lists,
             reference_annotation_lists,
         )
+
+    def _run_radgraph_in_chunks(self, reports, chunk_size=None):
+        """Run RadGraph with bounded memory and contiguous output keys."""
+        if chunk_size is None:
+            chunk_size = int(
+                os.environ.get(
+                    "RADGRAPH_INFERENCE_CHUNK_SIZE",
+                    self.DEFAULT_INFERENCE_CHUNK_SIZE,
+                )
+            )
+        chunk_size = max(1, chunk_size)
+
+        inference_dict = {}
+        with torch.inference_mode():
+            for start in range(0, len(reports), chunk_size):
+                chunk = reports[start:start + chunk_size]
+                chunk_output = self.radgraph(chunk)
+                for local_idx, annotation in chunk_output.items():
+                    inference_dict[str(start + int(local_idx))] = annotation
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+        return inference_dict
 
 
 def compute_statistic(reward_list):

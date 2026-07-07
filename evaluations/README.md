@@ -17,6 +17,7 @@ python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/aehrc__cx
 
 python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/Chantal__RaDialog-interactive-radiology-report-generation_radialog_default.json --output-mode per-file
 
+
 python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/microsoft__maira-2_maira2_default.json --output-mode per-file
 
 python evaluations/run_eval.py --filepath outputs/baseline/padchest-gr/nvidia__NV-Reason-CXR-3B_nv_reason_default.json --output-mode per-file

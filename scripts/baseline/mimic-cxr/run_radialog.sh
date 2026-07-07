@@ -3,21 +3,18 @@
 #SBATCH -p alvis
 #SBATCH -t 08:20:00
 #SBATCH --gpus-per-node=A40:1
-#SBATCH -J radialog_ro
-#SBATCH -o logs/ro/radialog_%j.out
-#SBATCH -e logs/ro/radialog_%j.err
-# Mail me
-#SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=marco.salme@unicampus.it
-
-# RaDialog Baseline Experiment
-# Model: ChantalPellworworworworworwor/RaDialog_RRG
-# Virtual Environment: .radialog_venv
+#SBATCH -J nv_reason_cxr_ro
+#SBATCH -o logs/nv_reason_cxr_%j.out
+#SBATCH -e logs/nv_reason_cxr_%j.err
+# NV-Reason-CXR Random Occlusion Experiment
+# Model: nvidia/nv-reason-cxr-3b
+# Virtual Environment: .venv_nv
 
 set -euo pipefail
 
-EXPERIMENT="all_noise_mean"
+EXPERIMENT="${1:-all_noise_mean}"
 SEED="${2:-3}"
+EXTRA_ARGS=("${@:3}")
 
 echo "=== RaDialog Baseline ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -27,7 +24,9 @@ echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
 
-module load Python/3.11.3-GCCcore-12.3.0
+module purge
+module load Python/3.11.5-GCCcore-13.2.0
+
 source .radialog_venv/bin/activate
 
 export HF_HOME="${PWD}/.models_cache"
@@ -55,7 +54,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 32
+    --num-images 32 \
+    "${EXTRA_ARGS[@]}"
 
 echo ""
 echo "=== Job Complete ==="

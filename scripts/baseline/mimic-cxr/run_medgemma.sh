@@ -6,18 +6,12 @@
 #SBATCH -J medgemma_ro
 #SBATCH -o logs/ro/medgemma_%j.out
 #SBATCH -e logs/ro/medgemma_%j.err
-# Mail me
-#SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=marco.salme@unicampus.it
-
-# MedGemma Random Occlusion Experiment
-# Model: google/medgemma-1.5-4b-it (4B parameters)
-# Virtual Environment: .venv_RRG
 
 set -euo pipefail
 
 EXPERIMENT="${1:-ro_p100}"
 SEED="${2:-3}"
+EXTRA_ARGS=("${@:3}")
 
 echo "=== MedGemma Random Occlusion ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -27,7 +21,9 @@ echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
 
-module load Python/3.11.3-GCCcore-12.3.0
+module purge
+module load Python/3.11.5-GCCcore-13.2.0
+
 source .venv_RRG/bin/activate
 
 export HF_HOME="${PWD}/.models_cache"
@@ -55,7 +51,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 100
+    --num-images 100 \
+    "${EXTRA_ARGS[@]}"
 
 echo ""
 echo "=== Job Complete ==="

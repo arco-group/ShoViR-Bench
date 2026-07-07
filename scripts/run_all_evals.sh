@@ -12,7 +12,9 @@
 #
 # Runner-specific flags:
 #   --dry-run              Preview commands without running
-#   --experiment <name>    Only evaluate files from this experiment (e.g. ro, baseline)
+#   --experiment <name>    Only evaluate files from this experiment (e.g. ro, baseline, baseline_SP)
+#   --baseline-sp          Shortcut for --experiment baseline_SP
+#   --model <pattern>      Only evaluate files matching this pattern in filename (e.g. gpt-5.4, gemini, medgemma)
 #   --parallel <N>         Max parallel evaluations (default: 4)
 #   --include-occlusion    Also include ro, doco, oco experiments (excluded by default)
 #
@@ -31,6 +33,14 @@
 #   sbatch scripts/run_all_evals.sh                                    # run all (excl. ro/doco/oco), per-file
 #   sbatch scripts/run_all_evals.sh --include-occlusion                # include ro, doco, oco
 #   sbatch scripts/run_all_evals.sh --experiment ro                    # only ro experiment
+#   sbatch scripts/run_all_evals.sh --experiment baseline_SP           # only single-prompt baseline
+#   sbatch scripts/run_all_evals.sh --baseline-sp                      # same as above
+#   sbatch scripts/run_all_evals.sh --experiment all_noise_mean_SP     # only all-noise-mean single-prompt
+#   sbatch scripts/run_all_evals.sh --all-noise-mean-sp                # same as above
+#   sbatch scripts/run_all_evals.sh --model gpt-5.4                    # only GPT-5.4 outputs
+#   sbatch scripts/run_all_evals.sh --model gemini                     # only Gemini outputs
+#   sbatch scripts/run_all_evals.sh --model medgemma                   # only MedGemma outputs
+#   sbatch scripts/run_all_evals.sh --model gpt-5.4 --include-occlusion  # GPT-5.4 incl. ro/oco/doco
 #   sbatch scripts/run_all_evals.sh --bootstrap-ci --save-breakdowns   # with CI + breakdowns
 #   bash   scripts/run_all_evals.sh --dry-run                          # preview
 #   bash   scripts/run_all_evals.sh --experiment baseline --dry-run
@@ -42,6 +52,7 @@ set -euo pipefail
 # ---------------------
 DRY_RUN=false
 FILTER_EXPERIMENT=""
+FILTER_MODEL=""
 MAX_PARALLEL=4
 INCLUDE_OCCLUSION=false
 
@@ -64,6 +75,9 @@ while [[ $# -gt 0 ]]; do
         # Runner-specific flags
         --dry-run)            DRY_RUN=true; shift ;;
         --experiment)         FILTER_EXPERIMENT="$2"; shift 2 ;;
+        --baseline-sp)        FILTER_EXPERIMENT="baseline_SP"; shift ;;
+        --all-noise-mean-sp)  FILTER_EXPERIMENT="all_noise_mean_SP"; shift ;;
+        --model)              FILTER_MODEL="$2"; shift 2 ;;
         --parallel)           MAX_PARALLEL="$2"; shift 2 ;;
         --include-occlusion)  INCLUDE_OCCLUSION=true; shift ;;
         # run_eval.py flags (with value)
@@ -136,7 +150,8 @@ echo "  Evaluation Multi-Runner"
 echo "============================================"
 echo "Project:       ${PROJECT_DIR}"
 echo "Outputs dir:   ${OUTPUTS_DIR}"
-echo "Filter:        ${FILTER_EXPERIMENT:-all}"
+echo "Filter exp:    ${FILTER_EXPERIMENT:-all}"
+echo "Filter model:  ${FILTER_MODEL:-all}"
 echo "Occlusion:     ${INCLUDE_OCCLUSION} (ro/doco/oco)"
 echo "Parallel:      ${MAX_PARALLEL}"
 echo "Dry run:       ${DRY_RUN}"
@@ -170,6 +185,18 @@ if [[ -n "$FILTER_EXPERIMENT" ]]; then
     ALL_FILES=("${FILTERED[@]}")
 fi
 
+# Filter by model pattern if requested (matches against filename)
+if [[ -n "$FILTER_MODEL" ]]; then
+    FILTERED=()
+    for f in "${ALL_FILES[@]}"; do
+        filename=$(basename "$f")
+        if [[ "$filename" == *"${FILTER_MODEL}"* ]]; then
+            FILTERED+=("$f")
+        fi
+    done
+    ALL_FILES=("${FILTERED[@]}")
+fi
+
 # Exclude occlusion experiments (ro, doco, oco) unless --include-occlusion is set
 if ! $INCLUDE_OCCLUSION; then
     FILTERED=()
@@ -197,6 +224,7 @@ for f in "${ALL_FILES[@]}"; do
     # Extract group: experiment or experiment/pXX
     # Path patterns:
     #   baseline/padchest-gr/file.json        -> baseline
+    #   baseline_SP/padchest-gr/file.json     -> baseline_SP
     #   ro/p20/padchest-gr/file.json          -> ro/p20
     #   all_noise/padchest-gr/file.json       -> all_noise
     exp=$(echo "$rel" | cut -d'/' -f1)

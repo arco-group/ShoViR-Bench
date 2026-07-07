@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -A NAISS2025-5-662
 #SBATCH -p alvis
-#SBATCH -t 01:30:00
+#SBATCH -t 07:30:00
 #SBATCH --gpus-per-node=A40:1
 #SBATCH -J llavarad_baseline
 #SBATCH -o logs/baseline/llavarad_%j.out
@@ -57,7 +57,7 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 24 \
+    --num-images 4 \
     ${EXTRA_ARGS}
 
 echo ""

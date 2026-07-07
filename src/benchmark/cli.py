@@ -73,6 +73,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="outputs",
         help="Base output directory for assembled output paths",
     )
+    parser.add_argument(
+        "--output-experiment",
+        default=None,
+        help=(
+            "Experiment name to use only for the assembled output path. "
+            "Useful when the preprocessing experiment stays the same but outputs "
+            "should be grouped separately, e.g. shared-prompt runs."
+        ),
+    )
     parser.add_argument("--cache-dir", default="./model_caching")
     parser.add_argument("--prompt-key", default=None)
     parser.add_argument(
@@ -307,7 +316,7 @@ def main() -> int:
         args.prompt_key = args.shared_prompt_key
 
     prompt_key = args.prompt_key or spec.prompt_key
-    output_experiment = "baseline_SP" if args.single_prompt_baseline else args.experiment
+    output_experiment = args.output_experiment or ("baseline_SP" if args.single_prompt_baseline else args.experiment)
 
     # Set random seed for reproducible bbox selection
     np.random.seed(args.seed)

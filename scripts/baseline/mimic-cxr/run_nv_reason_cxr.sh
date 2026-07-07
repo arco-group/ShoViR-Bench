@@ -4,12 +4,8 @@
 #SBATCH -t 08:20:00
 #SBATCH --gpus-per-node=A40:1
 #SBATCH -J nv_reason_cxr_ro
-#SBATCH -o logs/ro/nv_reason_cxr_%j.out
-#SBATCH -e logs/ro/nv_reason_cxr_%j.err
-# Mail me
-#SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=marco.salme@unicampus.it
-
+#SBATCH -o logs/nv_reason_cxr_%j.out
+#SBATCH -e logs/nv_reason_cxr_%j.err
 # NV-Reason-CXR Random Occlusion Experiment
 # Model: nvidia/nv-reason-cxr-3b
 # Virtual Environment: .venv_nv
@@ -18,6 +14,7 @@ set -euo pipefail
 
 EXPERIMENT="${1:-ro_p100}"
 SEED="${2:-3}"
+EXTRA_ARGS=("${@:3}")
 
 echo "=== NV-Reason-CXR Random Occlusion ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -26,8 +23,8 @@ echo "Experiment: ${EXPERIMENT}"
 echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
-
-module load Python/3.11.3-GCCcore-12.3.0
+module purge
+module load Python/3.11.5-GCCcore-13.2.0
 source .venv_nv/bin/activate
 
 export HF_HOME="${PWD}/.models_cache"
@@ -55,7 +52,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 128
+    --num-images 128 \
+    "${EXTRA_ARGS[@]}"
 
 echo ""
 echo "=== Job Complete ==="

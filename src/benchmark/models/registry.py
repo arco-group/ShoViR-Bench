@@ -1,5 +1,9 @@
 from .chexagent import MODEL_CLASS as CHEXAGENT_CLASS
 from .chexagent import MODEL_SPEC as CHEXAGENT_SPEC
+from .gemini import MODEL_CLASS as GEMINI_CLASS
+from .gemini import MODEL_SPEC as GEMINI_SPEC
+from .gpt54 import MODEL_CLASS as GPT54_CLASS
+from .gpt54 import MODEL_SPEC as GPT54_SPEC
 from .chexone import MODEL_CLASS as CHEXONE_CLASS
 from .chexone import MODEL_SPEC as CHEXONE_SPEC
 from .cxrmateed import MODEL_CLASS as CXRMATEED_CLASS
@@ -19,6 +23,8 @@ from .llavarad import MODEL_SPEC as LLAVARAD_SPEC
 from .spec import ModelSpec
 
 MODEL_SPECS: dict[str, ModelSpec] = {
+    GEMINI_SPEC.key: GEMINI_SPEC,
+    GPT54_SPEC.key: GPT54_SPEC,
     MEDGEMMA_SPEC.key: MEDGEMMA_SPEC,
     MAIRA2_SPEC.key: MAIRA2_SPEC,
     LIBRA_SPEC.key: LIBRA_SPEC,
@@ -31,6 +37,8 @@ MODEL_SPECS: dict[str, ModelSpec] = {
 }
 
 MODEL_CLASSES = {
+    GEMINI_SPEC.key: GEMINI_CLASS,
+    GPT54_SPEC.key: GPT54_CLASS,
     MEDGEMMA_SPEC.key: MEDGEMMA_CLASS,
     MAIRA2_SPEC.key: MAIRA2_CLASS,
     LIBRA_SPEC.key: LIBRA_CLASS,

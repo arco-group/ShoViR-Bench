@@ -46,8 +46,12 @@ from typing import List, Dict, Any, Callable, Optional
 from pathlib import Path
 import argparse
 import json
+import os
 import random
 import time
+
+# Reduce CUDA fragmentation during long metric runs, especially RadGraph.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import evaluate
 import numpy as np
@@ -813,4 +817,3 @@ if __name__ == "__main__":
         green_model_name=args.green_model_name,
         skip_existing=args.skip_existing,
     )
-

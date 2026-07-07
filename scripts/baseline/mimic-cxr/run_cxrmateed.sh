@@ -6,9 +6,6 @@
 #SBATCH -J cxrmateed_ro
 #SBATCH -o logs/ro/cxrmateed_%j.out
 #SBATCH -e logs/ro/cxrmateed_%j.err
-# Mail me
-#SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=marco.salme@unicampus.it
 
 # CXRMateED Random Occlusion Experiment
 # Model: aehrc/cxrmate-ed
@@ -18,6 +15,7 @@ set -euo pipefail
 
 EXPERIMENT="${1:-ro_p100}"
 SEED="${2:-3}"
+EXTRA_ARGS=("${@:3}")
 
 echo "=== CXRMateED Random Occlusion ==="
 echo "Job ID: ${SLURM_JOB_ID:-local}"
@@ -26,8 +24,8 @@ echo "Experiment: ${EXPERIMENT}"
 echo "Seed: ${SEED}"
 echo "Start time: $(date)"
 echo ""
-
-module load Python/3.11.3-GCCcore-12.3.0
+module purge
+module load Python/3.11.5-GCCcore-13.2.0
 source .venv_RRG/bin/activate
 
 export HF_HOME="${PWD}/.models_cache"
@@ -55,7 +53,8 @@ python -m src.benchmark.cli \
     --device cuda:0 \
     --dtype bfloat16 \
     --trust-remote-code \
-    --num-images 128
+    --num-images 128 \
+    "${EXTRA_ARGS[@]}"
 
 echo ""
 echo "=== Job Complete ==="
