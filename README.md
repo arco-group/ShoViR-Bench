@@ -1,4 +1,4 @@
-# SHOVIR
+# SHOVIR: A Benchmark for Evaluating Vision Shortcut Learning in Radiology Report Generation
 
 <div align="center">
 
