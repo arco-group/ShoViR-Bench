@@ -253,14 +253,8 @@ Full sweeps across `RO`, `OCO`, and `DOCO` at perturbation strengths `p ∈ {0, 
 
 ### Baseline vs. Full Noise Image (image-level evaluation)
 
-*Baseline* (white): performance on clean images. *Full Noise Image* (blue): performance when the entire image is replaced with noise. *ΔFN* (gray): absolute drop relative to baseline — higher means more visually grounded, lower means more shortcut-prone. Per metric, the best baseline score is **bold**; per dataset, the highest ΔFN is <span style="color:#1a7a35">**bold green**</span> (most grounded model) and the lowest ΔFN is <span style="color:#b3261e">**bold red, underlined**</span> (most shortcut-prone model).
-
 <p align="center">
-  <img src="figures/table_mimic.png" alt="Image-level evaluation table, MIMIC-CXR: baseline vs. full noise image, with delta" width="950"/>
-</p>
-
-<p align="center">
-  <img src="figures/table_padchest.png" alt="Image-level evaluation table, PadChest-GR: baseline vs. full noise image, with delta" width="950"/>
+  <img src="figures/table-baseline.png" alt="Table 1 — Image-level evaluation on MIMIC-CXR and PadChest-GR: baseline vs. full noise image, with delta" width="950"/>
 </p>
 
 CheXagent-2 shows the largest ΔFN on both datasets — the most visually grounded model when the entire image is replaced with noise — while LLaVA-Rad (MIMIC-CXR) and RaDialog (PadChest-GR) show the smallest, i.e. their scores barely move even with zero visual evidence left.
