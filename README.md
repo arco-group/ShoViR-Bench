@@ -1,10 +1,12 @@
-# SHOVIR: A Benchmark for Evaluating Vision Shortcut Learning in Radiology Report Generation
+# SHOVIR
 
 <div align="center">
 
 <p align="center">
   <img src="figures/BANNER-SHOVIR.png" alt="SHOVIR — a benchmark for vision shortcut learning in radiology report generation" width="820"/>
 </p>
+
+## SHOVIR: A Benchmark for Evaluating Vision Shortcut Learning in Radiology Report Generation
 
 [![arXiv](https://img.shields.io/badge/arXiv-2606.30201-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2606.30201)
 [![Paper PDF](https://img.shields.io/badge/Read%20the-Paper-1f6feb?style=for-the-badge&logo=readthedocs&logoColor=white)](https://arxiv.org/pdf/2606.30201)
