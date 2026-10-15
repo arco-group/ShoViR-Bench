@@ -31,12 +31,12 @@
 
 
 ---
+---
 
 ## 📰 News
 
-- **[2026-10-15]** 🎉 SHOVIR has been accepted at the **WACV 2027** main conference! See you in Orlando.
-
-
+> [!IMPORTANT]
+> ![NEW](https://img.shields.io/badge/NEW-ff4b4b?style=for-the-badge) **[2026-10-15]** 🎉 SHOVIR has been accepted at **WACV 2027 (Datasets Track)**! See you in Orlando ✈️
 <p align="center">
   <img src="figures/METHOD-RRG.png" alt="SHOVIR benchmark framework: data collection, occlusion experiments, VLM inference, and multi-axis evaluation" width="900"/>
 </p>
