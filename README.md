@@ -27,7 +27,15 @@
 
 </div>
 
+
+
+
 ---
+
+## 📰 News
+
+- **[2026-10-15]** 🎉 SHOVIR has been accepted at the **WACV 2027** main conference! See you in Orlando.
+
 
 <p align="center">
   <img src="figures/METHOD-RRG.png" alt="SHOVIR benchmark framework: data collection, occlusion experiments, VLM inference, and multi-axis evaluation" width="900"/>
