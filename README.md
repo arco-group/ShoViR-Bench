@@ -31,19 +31,25 @@
 
 
 ---
----
+
 
 ## 📰 News
 
 > [!IMPORTANT]
 > ![NEW](https://img.shields.io/badge/NEW-ff4b4b?style=for-the-badge) **[2026-10-15]** 🎉 SHOVIR has been accepted at **WACV 2027 (Datasets Track)**! See you in Orlando ✈️
+
+
+---
+
+
 <p align="center">
   <img src="figures/METHOD-RRG.png" alt="SHOVIR benchmark framework: data collection, occlusion experiments, VLM inference, and multi-axis evaluation" width="900"/>
 </p>
 
-<p align="center"><em>The SHOVIR benchmark framework — disease-annotated data collection (ImageGenome, PadChest-GR), controlled occlusion experiments (baseline, full-noise, object-class, co-occurrence, and random occlusion), VLM inference over the perturbed images, and a multi-axis evaluation (NLP, clinical, and shortcut metrics).</em></p>
 
+<p align="center"><em>The SHOVIR benchmark framework — disease-annotated data collection (ImageGenome, PadChest-GR), controlled occlusion experiments (baseline, full-noise, object-class, co-occurrence, and random occlusion), VLM inference over the perturbed images, and a multi-axis evaluation (NLP, clinical, and shortcut metrics).</em></p>
 ---
+
 
 ## Overview
 
